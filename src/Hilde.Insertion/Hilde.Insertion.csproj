@@ -10,4 +10,8 @@
     <ProjectReference Include="..\Hilde.Core\Hilde.Core.csproj" />
     <PackageReference Include="Serilog" />
   </ItemGroup>
+  <ItemGroup>
+    <!-- WPF-Projekte importieren System.IO nicht automatisch -->
+    <Using Include="System.IO" />
+  </ItemGroup>
 </Project>

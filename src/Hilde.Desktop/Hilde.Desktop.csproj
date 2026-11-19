@@ -39,4 +39,8 @@
     <Content Include="..\..\models\manifest.json" Link="models\manifest.json" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="..\..\licenses\**\*" LinkBase="licenses" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
+  <ItemGroup>
+    <!-- WPF-Projekte importieren System.IO nicht automatisch -->
+    <Using Include="System.IO" />
+  </ItemGroup>
 </Project>

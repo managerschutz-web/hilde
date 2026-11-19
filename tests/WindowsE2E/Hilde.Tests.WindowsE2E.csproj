@@ -15,4 +15,8 @@
     <ProjectReference Include="..\..\src\Hilde.Insertion\Hilde.Insertion.csproj" />
     <ProjectReference Include="..\..\src\Hilde.Audio\Hilde.Audio.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <!-- WPF-Projekte importieren System.IO nicht automatisch -->
+    <Using Include="System.IO" />
+  </ItemGroup>
 </Project>

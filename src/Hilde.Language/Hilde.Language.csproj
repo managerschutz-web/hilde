@@ -6,8 +6,6 @@
   <ItemGroup>
     <ProjectReference Include="..\Hilde.Core\Hilde.Core.csproj" />
     <PackageReference Include="LLamaSharp" />
-    <PackageReference Include="LLamaSharp.Backend.Cpu" />
-    <PackageReference Include="LLamaSharp.Backend.Vulkan" />
     <PackageReference Include="Serilog" />
   </ItemGroup>
   <ItemGroup>

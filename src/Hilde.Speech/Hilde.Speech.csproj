@@ -6,8 +6,6 @@
   <ItemGroup>
     <ProjectReference Include="..\Hilde.Core\Hilde.Core.csproj" />
     <PackageReference Include="Whisper.net" />
-    <PackageReference Include="Whisper.net.Runtime" />
-    <PackageReference Include="Whisper.net.Runtime.Vulkan" />
     <PackageReference Include="Serilog" />
   </ItemGroup>
 </Project>

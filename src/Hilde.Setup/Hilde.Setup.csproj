@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>$(HildeTfm)</TargetFramework>
+    <RootNamespace>Hilde.Setup</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Hilde.Core\Hilde.Core.csproj" />
+    <PackageReference Include="Serilog" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,42 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>$(HildeWinTfm)</TargetFramework>
+    <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
+    <RootNamespace>Hilde.Desktop</RootNamespace>
+    <AssemblyName>HILDE</AssemblyName>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ApplicationIcon>Assets\hilde.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- WPF und WinForms gleichzeitig: Mehrdeutigkeiten vermeiden -->
+    <Using Remove="System.Windows.Forms" />
+    <Using Remove="System.Drawing" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Hilde.Core\Hilde.Core.csproj" />
+    <ProjectReference Include="..\Hilde.Storage\Hilde.Storage.csproj" />
+    <ProjectReference Include="..\Hilde.Audio\Hilde.Audio.csproj" />
+    <ProjectReference Include="..\Hilde.Speech\Hilde.Speech.csproj" />
+    <ProjectReference Include="..\Hilde.Language\Hilde.Language.csproj" />
+    <ProjectReference Include="..\Hilde.Insertion\Hilde.Insertion.csproj" />
+    <ProjectReference Include="..\Hilde.Setup\Hilde.Setup.csproj" />
+    <PackageReference Include="Microsoft.Web.WebView2" />
+    <PackageReference Include="Serilog" />
+    <PackageReference Include="Serilog.Sinks.File" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Assets\hilde.ico" />
+    <!-- Oberfläche (HTML/CSS/kompiliertes TypeScript), Manifest und Lizenzen neben die EXE -->
+    <Content Include="..\..\ui\index.html" Link="ui\index.html" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\..\ui\styles\**\*" LinkBase="ui\styles" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\..\ui\assets\**\*" LinkBase="ui\assets" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\..\ui\dist\**\*.js" LinkBase="ui\dist" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\..\models\manifest.json" Link="models\manifest.json" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\..\licenses\**\*" LinkBase="licenses" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

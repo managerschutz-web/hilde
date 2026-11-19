@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Phase 3. Projekt ist angelegt, damit Architektur und Abhängigkeiten von Anfang an stimmen. -->
+  <PropertyGroup>
+    <TargetFramework>$(HildeTfm)</TargetFramework>
+    <RootNamespace>Hilde.Media</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Hilde.Core\Hilde.Core.csproj" />
+  </ItemGroup>
+</Project>

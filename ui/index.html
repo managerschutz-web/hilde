@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; connect-src 'none'; font-src 'self'">
+  <title>HILDE</title>
+  <link rel="stylesheet" href="styles/app.css">
+</head>
+<body>
+  <div class="app">
+    <nav class="rail" aria-label="Hauptnavigation">
+      <div class="brand">
+        <img src="assets/hilde-256.png" alt="" width="34" height="34">
+        <div>
+          <div class="brand-name">HILDE</div>
+          <div class="brand-sub" id="statusLine">Bereit</div>
+        </div>
+      </div>
+      <ul class="nav" role="list">
+        <li><button class="nav-item" data-view="dictations"><span class="ico" aria-hidden="true">🎙</span>Diktate</button></li>
+        <li><button class="nav-item" data-view="meetings"><span class="ico" aria-hidden="true">👥</span>Meetings</button></li>
+        <li><button class="nav-item" data-view="files"><span class="ico" aria-hidden="true">📄</span>Dateien</button></li>
+        <li><button class="nav-item" data-view="dictionary"><span class="ico" aria-hidden="true">📖</span>Wörterbuch</button></li>
+        <li><button class="nav-item" data-view="settings"><span class="ico" aria-hidden="true">⚙</span>Einstellungen</button></li>
+      </ul>
+      <div class="rail-foot">
+        <div class="hint" id="hotkeyHint">Strg rechts halten und sprechen</div>
+        <div class="made">Made with ♥ in Ummaschumm</div>
+      </div>
+    </nav>
+    <main id="view" class="view" tabindex="-1"></main>
+  </div>
+  <div id="overlay"></div>
+  <div id="toasts" class="toasts" role="status" aria-live="polite"></div>
+  <script type="module" src="dist/main.js"></script>
+</body>
+</html>

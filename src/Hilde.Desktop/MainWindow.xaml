@@ -1,0 +1,13 @@
+<Window x:Class="Hilde.Desktop.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:wv2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
+        Title="HILDE" Width="1180" Height="780" MinWidth="960" MinHeight="600"
+        WindowStartupLocation="CenterScreen" Icon="pack://application:,,,/Assets/hilde.ico"
+        Background="#F7F7F8">
+    <Grid>
+        <wv2:WebView2 x:Name="Web"/>
+        <TextBlock x:Name="Fallback" Visibility="Collapsed" Margin="40" TextWrapping="Wrap" FontSize="15"
+                   FontFamily="{StaticResource UiFont}"/>
+    </Grid>
+</Window>

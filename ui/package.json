@@ -1,0 +1,13 @@
+{
+  "name": "hilde-ui",
+  "private": true,
+  "version": "0.2.0",
+  "description": "HILDE – Oberfläche (WebView2). Wird zu ui/dist kompiliert.",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "watch": "tsc -p tsconfig.json --watch"
+  },
+  "devDependencies": {
+    "typescript": "5.9.3"
+  }
+}

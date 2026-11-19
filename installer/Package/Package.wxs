@@ -1,0 +1,40 @@
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <Package Name="HILDE" Manufacturer="wetzel.digital" Version="$(var.Version)"
+           UpgradeCode="{6B0E3C7A-58C2-4C11-9E53-3E7D2F4A1C90}" Scope="perUser" Compressed="yes"
+           Language="1031" Codepage="1252">
+    <SummaryInformation Description="HILDE – lokale KI-Diktier- und Transkriptionssoftware" />
+    <MajorUpgrade DowngradeErrorMessage="Eine neuere Version von HILDE ist bereits installiert." />
+    <MediaTemplate EmbedCab="yes" CompressionLevel="high" />
+
+    <Icon Id="hilde.ico" SourceFile="hilde.ico" />
+    <Property Id="ARPPRODUCTICON" Value="hilde.ico" />
+    <Property Id="ARPURLINFOABOUT" Value="https://wetzel.digital" />
+    <Property Id="ARPNOMODIFY" Value="1" />
+
+    <StandardDirectory Id="LocalAppDataFolder">
+      <Directory Id="ProgramsFolder" Name="Programs">
+        <Directory Id="INSTALLFOLDER" Name="HILDE" />
+      </Directory>
+    </StandardDirectory>
+    <StandardDirectory Id="ProgramMenuFolder" />
+
+    <!-- Alle veröffentlichten Dateien (App + isolierter Engine-Prozess + UI + Manifest + Lizenzen) -->
+    <ComponentGroup Id="AppFiles" Directory="INSTALLFOLDER">
+      <Files Include="$(var.AppDir)\**" />
+    </ComponentGroup>
+
+    <Component Id="Shortcuts" Directory="ProgramMenuFolder" Guid="{0E4D7F2B-1E5B-4D8A-9B0B-7C1A8F9E2D31}">
+      <Shortcut Id="StartMenuShortcut" Name="HILDE" Description="Taste drücken. Sprechen. Loslassen."
+                Target="[INSTALLFOLDER]HILDE.exe" WorkingDirectory="INSTALLFOLDER" Icon="hilde.ico" />
+      <RemoveFolder Id="RemoveInstallFolder" Directory="INSTALLFOLDER" On="uninstall" />
+      <RemoveFolder Id="RemoveProgramsFolder" Directory="ProgramsFolder" On="uninstall" />
+      <RegistryValue Root="HKCU" Key="Software\wetzel.digital\HILDE" Name="installed" Type="integer" Value="1" KeyPath="yes" />
+    </Component>
+
+    <!-- Benutzerdaten unter %LOCALAPPDATA%\HILDE werden bei der Deinstallation bewusst NICHT gelöscht. -->
+    <Feature Id="Main" Title="HILDE" Level="1">
+      <ComponentGroupRef Id="AppFiles" />
+      <ComponentRef Id="Shortcuts" />
+    </Feature>
+  </Package>
+</Wix>

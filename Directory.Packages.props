@@ -1,0 +1,25 @@
+<Project>
+  <!-- Zentrale Paketversionen. Bei Restore-Fehlern in der CI hier anpassen. -->
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageVersion Include="NAudio" Version="2.2.1" />
+    <PackageVersion Include="Whisper.net" Version="1.8.1" />
+    <PackageVersion Include="Whisper.net.Runtime" Version="1.8.1" />
+    <PackageVersion Include="Whisper.net.Runtime.Vulkan" Version="1.8.1" />
+    <PackageVersion Include="LLamaSharp" Version="0.25.0" />
+    <PackageVersion Include="LLamaSharp.Backend.Cpu" Version="0.25.0" />
+    <PackageVersion Include="LLamaSharp.Backend.Vulkan" Version="0.25.0" />
+    <PackageVersion Include="Microsoft.ML.OnnxRuntime" Version="1.22.0" />
+    <PackageVersion Include="Microsoft.Data.Sqlite" Version="10.0.0" />
+    <PackageVersion Include="Microsoft.Web.WebView2" Version="1.0.2903.40" />
+    <PackageVersion Include="Serilog" Version="4.2.0" />
+    <PackageVersion Include="Serilog.Sinks.File" Version="6.0.0" />
+    <PackageVersion Include="WixToolset.Bal.wixext" Version="5.0.2" />
+    <PackageVersion Include="WixToolset.Util.wixext" Version="5.0.2" />
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.13.0" />
+    <PackageVersion Include="xunit" Version="2.9.3" />
+    <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.0" />
+  </ItemGroup>
+</Project>

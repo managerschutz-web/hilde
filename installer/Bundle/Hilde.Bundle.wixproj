@@ -1,0 +1,13 @@
+<Project Sdk="WixToolset.Sdk/5.0.2">
+  <!-- HILDE-Setup.exe: WebView2-Laufzeit (falls fehlend) + HILDE.msi in einem Schritt. -->
+  <PropertyGroup>
+    <OutputType>Bundle</OutputType>
+    <OutputName>HILDE-Setup</OutputName>
+    <DefineConstants>Version=$(HildeVersion)</DefineConstants>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="WixToolset.Bal.wixext" />
+    <PackageReference Include="WixToolset.Util.wixext" />
+    <ProjectReference Include="..\Package\Hilde.Package.wixproj" />
+  </ItemGroup>
+</Project>

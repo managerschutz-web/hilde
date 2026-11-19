@@ -1,0 +1,97 @@
+{
+  "manifestVersion": 1,
+  "updated": "2026-11-19",
+  "models": [
+    {
+      "id": "silero-vad-v5",
+      "displayName": "Sprachaktivitätserkennung (Silero VAD v5)",
+      "kind": "vad",
+      "tiers": [],
+      "fileName": "silero_vad.onnx",
+      "url": "https://github.com/snakers4/silero-vad/raw/v5.1.2/src/silero_vad/data/silero_vad.onnx",
+      "sizeBytes": 2300000,
+      "sha256": null,
+      "license": "MIT",
+      "licenseUrl": "https://github.com/snakers4/silero-vad/blob/master/LICENSE",
+      "licenseStatus": "zu prüfen",
+      "architecture": "any",
+      "compatibility": "ONNX Runtime ≥ 1.16, 16 kHz, Fenster 512 + Kontext 64",
+      "optional": false
+    },
+    {
+      "id": "whisper-small-q5_1",
+      "displayName": "Spracherkennung Leicht (Whisper small, q5_1)",
+      "kind": "whisper",
+      "tiers": [
+        "light"
+      ],
+      "fileName": "ggml-small-q5_1.bin",
+      "url": "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small-q5_1.bin",
+      "sizeBytes": 190000000,
+      "sha256": null,
+      "license": "MIT (OpenAI Whisper Gewichte)",
+      "licenseUrl": "https://github.com/openai/whisper/blob/main/LICENSE",
+      "licenseStatus": "zu prüfen",
+      "architecture": "x64 (CPU/Vulkan)",
+      "compatibility": "whisper.cpp GGML, Whisper.net 1.8",
+      "optional": false
+    },
+    {
+      "id": "whisper-large-v3-turbo-q5_0",
+      "displayName": "Spracherkennung Standard (Whisper large-v3-turbo, q5_0)",
+      "kind": "whisper",
+      "tiers": [
+        "standard"
+      ],
+      "fileName": "ggml-large-v3-turbo-q5_0.bin",
+      "url": "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo-q5_0.bin",
+      "sizeBytes": 574000000,
+      "sha256": null,
+      "license": "MIT (OpenAI Whisper Gewichte)",
+      "licenseUrl": "https://github.com/openai/whisper/blob/main/LICENSE",
+      "licenseStatus": "zu prüfen",
+      "architecture": "x64 (CPU/Vulkan)",
+      "compatibility": "whisper.cpp GGML, Whisper.net 1.8",
+      "optional": false
+    },
+    {
+      "id": "qwen2.5-1.5b-instruct-q4_k_m",
+      "displayName": "Textbereinigung Leicht (Qwen2.5 1.5B Instruct, Q4_K_M)",
+      "kind": "llm",
+      "tiers": [
+        "light"
+      ],
+      "fileName": "qwen2.5-1.5b-instruct-q4_k_m.gguf",
+      "url": "https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF/resolve/main/qwen2.5-1.5b-instruct-q4_k_m.gguf",
+      "sizeBytes": 1120000000,
+      "sha256": null,
+      "license": "Apache-2.0",
+      "licenseUrl": "https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct/blob/main/LICENSE",
+      "licenseStatus": "zu prüfen",
+      "architecture": "x64 (CPU/Vulkan)",
+      "compatibility": "llama.cpp GGUF, LLamaSharp 0.25, Chat-Vorlage ChatML",
+      "promptFormat": "chatml",
+      "optional": true
+    },
+    {
+      "id": "gemma-3-4b-it-q4_k_m",
+      "displayName": "Textbereinigung Standard (Gemma 3 4B Instruct, Q4_K_M)",
+      "kind": "llm",
+      "tiers": [
+        "standard"
+      ],
+      "fileName": "gemma-3-4b-it-Q4_K_M.gguf",
+      "url": "https://huggingface.co/ggml-org/gemma-3-4b-it-GGUF/resolve/main/gemma-3-4b-it-Q4_K_M.gguf",
+      "sizeBytes": 2490000000,
+      "sha256": null,
+      "license": "Gemma Terms of Use",
+      "licenseUrl": "https://ai.google.dev/gemma/terms",
+      "licenseStatus": "zu prüfen – Nutzungsbedingungen und Prohibited Use Policy für den gewerblichen Einsatz bewerten; Gemma 4 (Koe-Referenz) erst nach Format-/Windows-Test",
+      "architecture": "x64 (CPU/Vulkan)",
+      "compatibility": "llama.cpp GGUF, LLamaSharp 0.25, Chat-Vorlage Gemma",
+      "promptFormat": "gemma",
+      "optional": true
+    }
+  ],
+  "note": "sizeBytes sind Richtwerte, sha256 null = noch nicht festgeschrieben. scripts/update-manifest.ps1 trägt exakte Größen und Prüfsummen ein; Freigabe-Builds brechen ab, solange ein Wert fehlt."
+}

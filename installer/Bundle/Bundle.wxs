@@ -1,0 +1,29 @@
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:bal="http://wixtoolset.org/schemas/v4/wxs/bal"
+     xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util">
+  <Bundle Name="HILDE" Manufacturer="wetzel.digital" Version="$(var.Version)"
+          UpgradeCode="{A4C9D1E2-7B3F-4E86-8C2A-5D9F0B6E3A17}" IconSourceFile="..\Package\hilde.ico"
+          AboutUrl="https://wetzel.digital">
+    <BootstrapperApplication>
+      <bal:WixStandardBootstrapperApplication Theme="hyperlinkLicense" LicenseUrl=""
+                                              LogoFile="hilde-64.png" ShowVersion="yes" SuppressOptionsUI="yes" />
+    </BootstrapperApplication>
+
+    <!-- „Starten“-Schaltfläche am Ende der Installation -->
+    <Variable Name="LaunchTarget" Value="[LocalAppDataFolder]Programs\HILDE\HILDE.exe" />
+
+    <util:RegistrySearch Id="WebView2Machine" Variable="WebView2MachineVersion" Root="HKLM"
+                         Key="SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}" Value="pv" />
+    <util:RegistrySearch Id="WebView2User" Variable="WebView2UserVersion" Root="HKCU"
+                         Key="Software\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}" Value="pv" />
+
+    <Chain>
+      <!-- Unter Windows 11 i. d. R. vorhanden; sonst Evergreen-Bootstrapper (benötigt einmalig Internet). -->
+      <ExePackage Id="WebView2Runtime" DisplayName="Microsoft Edge WebView2-Laufzeit"
+                  SourceFile="WebView2Bootstrapper.exe" Cache="remove" Permanent="yes" Vital="no" PerMachine="no"
+                  DetectCondition="(WebView2MachineVersion AND WebView2MachineVersion &lt;&gt; &quot;0.0.0.0&quot;) OR (WebView2UserVersion AND WebView2UserVersion &lt;&gt; &quot;0.0.0.0&quot;)"
+                  InstallArguments="/silent /install" />
+      <MsiPackage Id="HildeMsi" SourceFile="$(var.Hilde.Package.TargetPath)" />
+    </Chain>
+  </Bundle>
+</Wix>

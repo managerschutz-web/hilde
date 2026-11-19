@@ -1,0 +1,11 @@
+<Project Sdk="WixToolset.Sdk/5.0.2">
+  <!-- MSI: Installation pro Benutzer nach %LOCALAPPDATA%\Programs\HILDE (keine Adminrechte nötig). -->
+  <PropertyGroup>
+    <OutputName>HILDE</OutputName>
+    <AppDir Condition="'$(AppDir)' == ''">$(MSBuildThisFileDirectory)..\..\artifacts\app</AppDir>
+    <DefineConstants>AppDir=$(AppDir);Version=$(HildeVersion)</DefineConstants>
+    <Cultures>de-DE</Cultures>
+    <!-- Per-User-Komponenten mit Datei-KeyPath sind gewollt (keine Registry-Leichen pro Datei). -->
+    <SuppressIces>ICE38;ICE64;ICE91</SuppressIces>
+  </PropertyGroup>
+</Project>

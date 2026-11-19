@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Windows-Integrations-/E2E-Tests: brauchen einen echten Desktop (CI: windows-latest, interaktive Sitzung). -->
+  <PropertyGroup>
+    <TargetFramework>$(HildeWinTfm)</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Hilde.Core\Hilde.Core.csproj" />
+    <ProjectReference Include="..\..\src\Hilde.Insertion\Hilde.Insertion.csproj" />
+    <ProjectReference Include="..\..\src\Hilde.Audio\Hilde.Audio.csproj" />
+  </ItemGroup>
+</Project>

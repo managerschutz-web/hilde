@@ -1,0 +1,16 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ES2022",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "strict": true,
+    "noUnusedLocals": true,
+    "noImplicitReturns": true,
+    "rootDir": ".",
+    "outDir": "dist",
+    "sourceMap": false,
+    "skipLibCheck": true
+  },
+  "include": ["main.ts", "bridge.ts", "components/**/*.ts", "views/**/*.ts"]
+}

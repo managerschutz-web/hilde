@@ -5,6 +5,7 @@ using Hilde.Core.Engines;
 using Serilog;
 using Whisper.net;
 using Whisper.net.LibraryLoader;
+using Whisper.net.Logger;
 
 namespace Hilde.Speech;
 

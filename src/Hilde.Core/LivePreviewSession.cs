@@ -142,7 +142,10 @@ public sealed class LivePreviewSession
             rms[f] = Math.Sqrt(sum / frame);
         }
         var sorted = rms.OrderBy(x => x).ToArray();
-        double threshold = Math.Max(0.006, sorted[frames / 5] * 2.5);
+        // Leise = deutlich über dem Grundrauschen, aber klar unter typischer Sprechlautstärke.
+        double noiseFloor = sorted[frames / 20];
+        double speechLevel = sorted[frames * 3 / 4];
+        double threshold = Math.Max(0.008, Math.Min(noiseFloor * 3, speechLevel * 0.25));
 
         int runStart = -1, bestMid = -1;
         for (int f = 0; f <= frames; f++)

@@ -180,3 +180,62 @@ public class ModelManagerTests
         Assert.False(File.Exists(Path.Combine(paths.VadModels, "vad.onnx.part")));
     }
 }
+
+public class VoiceArchiveTests
+{
+    private sealed class BytesHandler(byte[] data) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct) =>
+            Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(data) });
+    }
+
+    private static byte[] BuildTarBz2()
+    {
+        using var ms = new MemoryStream();
+        using (var bz = new ICSharpCode.SharpZipLib.BZip2.BZip2OutputStream(ms) { IsStreamOwner = false })
+        using (var tw = new System.Formats.Tar.TarWriter(bz, System.Formats.Tar.TarEntryFormat.Pax, leaveOpen: true))
+        {
+            foreach (var (name, content) in new[] { ("voice/de.onnx", "onnx"), ("voice/tokens.txt", "a 1"), ("voice/espeak-ng-data/de_dict", "x") })
+            {
+                var entry = new System.Formats.Tar.PaxTarEntry(System.Formats.Tar.TarEntryType.RegularFile, name)
+                {
+                    DataStream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(content))
+                };
+                tw.WriteEntry(entry);
+            }
+        }
+        return ms.ToArray();
+    }
+
+    [Fact]
+    public async Task Downloads_and_extracts_voice()
+    {
+        using var tmp = new TempDir();
+        var paths = new HildePaths(tmp.Path);
+        paths.EnsureCreated();
+        var data = BuildTarBz2();
+        var manifest = new ModelManifest
+        {
+            ManifestVersion = 1,
+            Models =
+            [
+                new ModelEntry
+                {
+                    Id = "tts-test", Kind = ModelKind.Tts, FileName = "voice.tar.bz2", Url = "https://example.invalid/voice.tar.bz2",
+                    SizeBytes = data.Length, Sha256 = Convert.ToHexString(SHA256.HashData(data)).ToLowerInvariant(),
+                    License = "MIT", Archive = "tar.bz2", Optional = true
+                }
+            ]
+        };
+        var mm = new ModelManager(paths, manifest, Log.Logger, new BytesHandler(data));
+        await mm.DownloadModelAsync("tts-test", CancellationToken.None);
+        var dir = mm.GetInstalledPathById("tts-test");
+        Assert.NotNull(dir);
+        Assert.True(File.Exists(Path.Combine(dir!, "voice", "de.onnx")));
+        Assert.True(File.Exists(Path.Combine(dir!, "voice", "espeak-ng-data", "de_dict")));
+        Assert.False(File.Exists(Path.Combine(paths.ModelDir(ModelKind.Tts), "voice.tar.bz2")));
+        Assert.True(await mm.VerifyAsync("tts-test", CancellationToken.None));
+        mm.Remove("tts-test");
+        Assert.False(Directory.Exists(dir));
+    }
+}

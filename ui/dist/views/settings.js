@@ -34,12 +34,13 @@ export function renderSettings(root) {
     async function draw() {
         try {
             s = await call('settings.get');
-            const [devices, info, models, loc, uninst] = await Promise.all([
+            const [devices, info, models, loc, uninst, voices] = await Promise.all([
                 call('devices.list').catch(() => []),
                 call('app.info'),
                 call('models.status', { tier: s.performanceTier }),
                 call('models.location'),
                 call('app.uninstallInfo').catch(() => ({ available: false })),
+                call('tts.voices').catch(() => []),
             ]);
             clear(root);
             // Hotkey
@@ -79,7 +80,7 @@ export function renderSettings(root) {
                 call('mic.monitorStop').catch(() => { }); });
             const devOptions = [['', 'Windows-Standardmikrofon'], ...devices.map((d) => [d.id, d.name + (d.isDefault ? ' (Standard)' : '')])];
             const installed = models.models.filter((m) => m.installed).length;
-            root.append(h('header', { class: 'view-head' }, h('div', null, h('h1', null, 'Einstellungen'), h('p', { class: 'muted' }, 'Änderungen werden sofort gespeichert.')), h('div', { class: 'row tight' }, h('button', { class: 'btn', onclick: () => call('app.openLogs') }, 'Protokolle öffnen'), h('button', { class: 'btn', onclick: () => call('app.openData') }, 'Datenordner'))), h('div', { class: 'settings' }, section('Diktat', h('div', { class: 'field inline' }, h('span', null, 'Diktiertaste'), hotkeyBtn), number('Mindestens halten', s.hotkey.minHoldMs, 100, 800, 25, 'ms', v => s.hotkey.minHoldMs = v), number('Doppeltipp-Fenster', s.hotkey.doubleTapMs, 200, 800, 25, 'ms', v => s.hotkey.doubleTapMs = v), toggle('Esc verwirft die laufende Aufnahme', s.hotkey.escapeCancels, v => s.hotkey.escapeCancels = v), toggle('Live-Text während des Sprechens', s.livePreview, v => s.livePreview = v, 'Zeigt den erkannten Text in der Pill und rechnet schon vor – lange Diktate sind danach schneller fertig.'), toggle('Diktierbefehle', s.dictationCommands, v => s.dictationCommands = v, '„neuer Absatz“, „neue Zeile“ und „Doppelpunkt“ werden umgesetzt.'), toggle('Schnellmodus für kurze Diktate', s.fastShortDictation, v => s.fastShortDictation = v, 'Kurze Aufnahmen werden mit kleinerem Rechenfenster erkannt. Bei Erkennungsproblemen testweise ausschalten.')), section('Mikrofon', select('Gerät', s.microphoneId ?? '', devOptions, v => s.microphoneId = v || null), h('div', { class: 'row' }, monBtn, meter)), section('Sprache & Text', select('Sprache', s.language, [['de', 'Deutsch'], ['en', 'Englisch'], ['auto', 'Automatisch erkennen']], v => s.language = v), select('Textbearbeitung', s.textMode, [['Original', 'Original – unverändert'], ['Clean', 'Bereinigt – Satzzeichen, Füllwörter, Selbstkorrekturen'], ['Professional', 'Professionell – zusätzlich Grammatik und Stil']], v => s.textMode = v, 'Die KI ändert keine Fakten, Namen, Beträge oder Termine. Im Zweifel wird ihr Ergebnis verworfen.')), section('Formatierung', h('p', { class: 'muted small' }, 'Gilt in den Modi „Bereinigt“ und „Professionell“.'), toggle('Beträge', s.format.amounts, v => s.format.amounts = v, '„1250 Euro“ → 1.250 €, „99,5 Euro“ → 99,50 €'), toggle('Datumsangaben', s.format.dates, v => s.format.dates = v, '„3. Mai 2026“ → 03.05.2026'), toggle('Uhrzeiten', s.format.times, v => s.format.times = v, '„10 Uhr 30“ → 10:30 Uhr'), toggle('Prozent', s.format.percent, v => s.format.percent = v, '„5 Prozent“ → 5 %'), toggle('IBAN und Kennzeichen', s.format.codes, v => s.format.codes = v, 'IBAN in Viererblöcken, „Kennzeichen IGB AB 123“ → IGB-AB 123')), section('Einfügen', select('Methode', s.insertion.method, [['Auto', 'Automatisch (Zwischenablage + Einfügen)'], ['Clipboard', 'Immer Zwischenablage'], ['Typing', 'Zeichenweise tippen (ohne Zwischenablage)']], v => s.insertion.method = v), toggle('Zwischenablage danach wiederherstellen', s.insertion.restoreClipboard, v => s.insertion.restoreClipboard = v, 'Nur wenn sie in der Zwischenzeit unverändert blieb. Diktate erscheinen nicht im Windows-Zwischenablageverlauf.'), number('Wartezeit Remotedesktop', s.insertion.remoteRestoreDelayMs, 500, 5000, 100, 'ms', v => s.insertion.remoteRestoreDelayMs = v)), section('Pill', toggle('Pill anzeigen', s.pill.visible, v => s.pill.visible = v), toggle('Immer im Vordergrund', s.pill.topmost, v => s.pill.topmost = v), number('Deckkraft', Math.round(s.pill.opacity * 100), 40, 100, 5, '%', v => s.pill.opacity = v / 100), colorRow('Hintergrund', s.pill.backgroundColor, v => s.pill.backgroundColor = v), colorRow('Akzent (Aufnahme, Pegel)', s.pill.accentColor, v => s.pill.accentColor = v), h('div', { class: 'row' }, ...[['#161A22', '#34D399', 'Nacht'], ['#F4F5F7', '#0F9F75', 'Hell'], ['#0B1E3A', '#7EF0B4', 'dieapp'], ['#2A1630', '#F472B6', 'Beere'], ['#1F2937', '#F59E0B', 'Bernstein']]
+            root.append(h('header', { class: 'view-head' }, h('div', null, h('h1', null, 'Einstellungen'), h('p', { class: 'muted' }, 'Änderungen werden sofort gespeichert.')), h('div', { class: 'row tight' }, h('button', { class: 'btn', onclick: () => call('app.openLogs') }, 'Protokolle öffnen'), h('button', { class: 'btn', onclick: () => call('app.openData') }, 'Datenordner'))), h('div', { class: 'settings' }, section('Diktat', h('div', { class: 'field inline' }, h('span', null, 'Diktiertaste'), hotkeyBtn), number('Mindestens halten', s.hotkey.minHoldMs, 100, 800, 25, 'ms', v => s.hotkey.minHoldMs = v), number('Doppeltipp-Fenster', s.hotkey.doubleTapMs, 200, 800, 25, 'ms', v => s.hotkey.doubleTapMs = v), toggle('Esc verwirft die laufende Aufnahme', s.hotkey.escapeCancels, v => s.hotkey.escapeCancels = v), toggle('Live-Text während des Sprechens', s.livePreview, v => s.livePreview = v, 'Zeigt den erkannten Text in der Pill und rechnet schon vor – lange Diktate sind danach schneller fertig.'), toggle('Diktierbefehle', s.dictationCommands, v => s.dictationCommands = v, '„neuer Absatz“, „neue Zeile“ und „Doppelpunkt“ werden umgesetzt.'), toggle('Schnellmodus für kurze Diktate', s.fastShortDictation, v => s.fastShortDictation = v, 'Kurze Aufnahmen werden mit kleinerem Rechenfenster erkannt. Bei Erkennungsproblemen testweise ausschalten.')), voiceSection(voices, info), section('Mikrofon', select('Gerät', s.microphoneId ?? '', devOptions, v => s.microphoneId = v || null), h('div', { class: 'row' }, monBtn, meter)), section('Sprache & Text', select('Sprache', s.language, [['de', 'Deutsch'], ['en', 'Englisch'], ['auto', 'Automatisch erkennen']], v => s.language = v), select('Textbearbeitung', s.textMode, [['Original', 'Original – unverändert'], ['Clean', 'Bereinigt – Satzzeichen, Füllwörter, Selbstkorrekturen'], ['Professional', 'Professionell – zusätzlich Grammatik und Stil']], v => s.textMode = v, 'Die KI ändert keine Fakten, Namen, Beträge oder Termine. Im Zweifel wird ihr Ergebnis verworfen.')), section('Formatierung', h('p', { class: 'muted small' }, 'Gilt in den Modi „Bereinigt“ und „Professionell“.'), toggle('Beträge', s.format.amounts, v => s.format.amounts = v, '„1250 Euro“ → 1.250 €, „99,5 Euro“ → 99,50 €'), toggle('Datumsangaben', s.format.dates, v => s.format.dates = v, '„3. Mai 2026“ → 03.05.2026'), toggle('Uhrzeiten', s.format.times, v => s.format.times = v, '„10 Uhr 30“ → 10:30 Uhr'), toggle('Prozent', s.format.percent, v => s.format.percent = v, '„5 Prozent“ → 5 %'), toggle('IBAN und Kennzeichen', s.format.codes, v => s.format.codes = v, 'IBAN in Viererblöcken, „Kennzeichen IGB AB 123“ → IGB-AB 123')), section('Einfügen', select('Methode', s.insertion.method, [['Auto', 'Automatisch (Zwischenablage + Einfügen)'], ['Clipboard', 'Immer Zwischenablage'], ['Typing', 'Zeichenweise tippen (ohne Zwischenablage)']], v => s.insertion.method = v), toggle('Zwischenablage danach wiederherstellen', s.insertion.restoreClipboard, v => s.insertion.restoreClipboard = v, 'Nur wenn sie in der Zwischenzeit unverändert blieb. Diktate erscheinen nicht im Windows-Zwischenablageverlauf.'), number('Wartezeit Remotedesktop', s.insertion.remoteRestoreDelayMs, 500, 5000, 100, 'ms', v => s.insertion.remoteRestoreDelayMs = v)), section('Pill', toggle('Pill anzeigen', s.pill.visible, v => s.pill.visible = v), toggle('Immer im Vordergrund', s.pill.topmost, v => s.pill.topmost = v), number('Deckkraft', Math.round(s.pill.opacity * 100), 40, 100, 5, '%', v => s.pill.opacity = v / 100), colorRow('Hintergrund', s.pill.backgroundColor, v => s.pill.backgroundColor = v), colorRow('Akzent (Aufnahme, Pegel)', s.pill.accentColor, v => s.pill.accentColor = v), h('div', { class: 'row' }, ...[['#161A22', '#34D399', 'Nacht'], ['#F4F5F7', '#0F9F75', 'Hell'], ['#0B1E3A', '#7EF0B4', 'dieapp'], ['#2A1630', '#F472B6', 'Beere'], ['#1F2937', '#F59E0B', 'Bernstein']]
                 .map(([bg, ac, name]) => h('button', {
                 class: 'swatch', title: name, 'aria-label': `Farbschema ${name}`, style: `--bg:${bg};--ac:${ac}`,
                 onclick: () => { s.pill.backgroundColor = bg; s.pill.accentColor = ac; persist(); draw(); }
@@ -88,6 +89,48 @@ export function renderSettings(root) {
         catch (e) {
             toast(errorText(e), 'error');
         }
+    }
+    function voiceSection(voices, _info) {
+        const keyBtn = h('button', { class: 'btn', onclick: async () => {
+                keyBtn.textContent = 'Jetzt gewünschte Taste drücken …';
+                try {
+                    const r = await call('hotkey.capture', { target: 'read' }, 15000);
+                    if (r.ok) {
+                        s.readAloud.virtualKey = r.vk;
+                        s.readAloud.displayName = r.name;
+                        persist();
+                    }
+                    else
+                        toast(r.message, 'error', 5000);
+                }
+                catch (e) {
+                    toast(errorText(e), 'error');
+                }
+                keyBtn.textContent = s.readAloud.displayName;
+            } }, s.readAloud.displayName);
+        const rows = voices.map(v => {
+            const radio = h('input', { type: 'radio', name: 'voice', checked: v.id === s.readAloud.voiceId, disabled: !v.installed,
+                onchange: () => { s.readAloud.voiceId = v.id; persist(); } });
+            const action = v.installed
+                ? h('button', { class: 'btn small', onclick: () => call('tts.speak', { text: `Hallo, ich bin ${v.displayName.replace(/^Stimme /, '').split(' ')[0]}. So klinge ich, wenn ich dir deine Texte vorlese.` }) }, '▶ Probe hören')
+                : h('button', { class: 'btn small', onclick: async (e) => {
+                        const b = e.target;
+                        b.disabled = true;
+                        b.textContent = 'Lädt …';
+                        const r = await call('tts.download', { id: v.id }, 30 * 60000);
+                        if (r.ok) {
+                            toast('Stimme installiert', 'ok');
+                            draw();
+                        }
+                        else {
+                            toast(r.message, 'error');
+                            b.disabled = false;
+                            b.textContent = 'Stimme laden';
+                        }
+                    } }, `Stimme laden (${fmtBytes(v.sizeBytes)})`);
+            return h('div', { class: 'voice' }, h('label', { class: 'check' }, radio, v.displayName), h('span', { class: 'spacer' }), action);
+        });
+        return section('Vorlesen', h('p', { class: 'muted small' }, 'Natürliche Stimme, komplett offline. Text in einem beliebigen Programm markieren und die Vorlesetaste drücken – oder Rechtsklick auf die Pill. Nochmal drücken stoppt.'), ...rows, h('div', { class: 'field inline' }, h('span', null, 'Vorlesetaste'), keyBtn), number('Tempo', Math.round(s.readAloud.speed * 100), 50, 200, 5, '%', v => s.readAloud.speed = v / 100));
     }
     function colorRow(label, value, set) {
         const inp = h('input', { type: 'color', class: 'color', value, onchange: (e) => { set(e.target.value.toUpperCase()); persist(); } });

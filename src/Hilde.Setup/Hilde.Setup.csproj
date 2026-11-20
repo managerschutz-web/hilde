@@ -6,5 +6,6 @@
   <ItemGroup>
     <ProjectReference Include="..\Hilde.Core\Hilde.Core.csproj" />
     <PackageReference Include="Serilog" />
+    <PackageReference Include="SharpZipLib" />
   </ItemGroup>
 </Project>

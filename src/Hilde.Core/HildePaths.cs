@@ -59,6 +59,7 @@ public sealed class HildePaths
         ModelKind.Llm => LlmModels,
         ModelKind.Diarization => DiarizationModels,
         ModelKind.Vad => VadModels,
+        ModelKind.Tts => Path.Combine(Models, "tts"),
         _ => Models
     };
 

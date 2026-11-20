@@ -39,12 +39,13 @@ export function renderSettings(root: HTMLElement): () => void {
   async function draw(): Promise<void> {
     try {
       s = await call('settings.get');
-      const [devices, info, models, loc, uninst] = await Promise.all([
+      const [devices, info, models, loc, uninst, voices] = await Promise.all([
         call<any[]>('devices.list').catch(() => []),
         call<any>('app.info'),
         call<any>('models.status', { tier: s.performanceTier }),
         call<any>('models.location'),
         call<any>('app.uninstallInfo').catch(() => ({ available: false })),
+        call<any[]>('tts.voices').catch(() => []),
       ]);
       clear(root);
 
@@ -92,6 +93,7 @@ export function renderSettings(root: HTMLElement): () => void {
               '„neuer Absatz“, „neue Zeile“ und „Doppelpunkt“ werden umgesetzt.'),
             toggle('Schnellmodus für kurze Diktate', s.fastShortDictation, v => s.fastShortDictation = v,
               'Kurze Aufnahmen werden mit kleinerem Rechenfenster erkannt. Bei Erkennungsproblemen testweise ausschalten.')),
+          voiceSection(voices, info),
           section('Mikrofon',
             select('Gerät', s.microphoneId ?? '', devOptions, v => s.microphoneId = v || null),
             h('div', { class: 'row' }, monBtn, meter)),
@@ -155,6 +157,35 @@ export function renderSettings(root: HTMLElement): () => void {
               h('button', { class: 'btn', onclick: showLicenses }, 'Lizenzen anzeigen'),
               uninst.available ? h('button', { class: 'btn danger-ghost', onclick: uninstall }, 'HILDE deinstallieren …') : null))));
     } catch (e) { toast(errorText(e), 'error'); }
+  }
+
+  function voiceSection(voices: any[], _info: any) {
+    const keyBtn = h('button', { class: 'btn', onclick: async () => {
+      keyBtn.textContent = 'Jetzt gewünschte Taste drücken …';
+      try {
+        const r = await call<any>('hotkey.capture', { target: 'read' }, 15000);
+        if (r.ok) { s.readAloud.virtualKey = r.vk; s.readAloud.displayName = r.name; persist(); }
+        else toast(r.message, 'error', 5000);
+      } catch (e) { toast(errorText(e), 'error'); }
+      keyBtn.textContent = s.readAloud.displayName;
+    } }, s.readAloud.displayName);
+    const rows = voices.map(v => {
+      const radio = h('input', { type: 'radio', name: 'voice', checked: v.id === s.readAloud.voiceId, disabled: !v.installed,
+        onchange: () => { s.readAloud.voiceId = v.id; persist(); } });
+      const action = v.installed
+        ? h('button', { class: 'btn small', onclick: () => call('tts.speak', { text: `Hallo, ich bin ${v.displayName.replace(/^Stimme /, '').split(' ')[0]}. So klinge ich, wenn ich dir deine Texte vorlese.` }) }, '▶ Probe hören')
+        : h('button', { class: 'btn small', onclick: async (e: Event) => {
+            const b = e.target as HTMLButtonElement; b.disabled = true; b.textContent = 'Lädt …';
+            const r = await call<any>('tts.download', { id: v.id }, 30 * 60000);
+            if (r.ok) { toast('Stimme installiert', 'ok'); draw(); } else { toast(r.message, 'error'); b.disabled = false; b.textContent = 'Stimme laden'; }
+          } }, `Stimme laden (${fmtBytes(v.sizeBytes)})`);
+      return h('div', { class: 'voice' }, h('label', { class: 'check' }, radio, v.displayName), h('span', { class: 'spacer' }), action);
+    });
+    return section('Vorlesen',
+      h('p', { class: 'muted small' }, 'Natürliche Stimme, komplett offline. Text in einem beliebigen Programm markieren und die Vorlesetaste drücken – oder Rechtsklick auf die Pill. Nochmal drücken stoppt.'),
+      ...rows,
+      h('div', { class: 'field inline' }, h('span', null, 'Vorlesetaste'), keyBtn),
+      number('Tempo', Math.round(s.readAloud.speed * 100), 50, 200, 5, '%', v => s.readAloud.speed = v / 100));
   }
 
   function colorRow(label: string, value: string, set: (v: string) => void) {

@@ -56,11 +56,28 @@ public sealed class ModelManager : IModelManager
         }
     }
 
+    private static bool PathExists(string path) => File.Exists(path) || Directory.Exists(path);
+
+    public string? GetInstalledPathById(string id) =>
+        _installed.Models.TryGetValue(id, out var i) && PathExists(i.Path) ? i.Path : null;
+
+    public IReadOnlyList<ModelEntry> Entries(ModelKind kind) => _manifest.Models.Where(m => m.Kind == kind).ToList();
+
+    /// <summary>Einzelnes Modell laden (z. B. eine zusätzliche Stimme).</summary>
+    public async Task DownloadModelAsync(string id, CancellationToken ct)
+    {
+        var m = _manifest.Models.FirstOrDefault(x => x.Id == id) ?? throw new ArgumentException("Unbekanntes Modell");
+        if (IsInstalled(m)) return;
+        var free = SystemCheck.FreeBytes(_paths.Root);
+        if (free is { } f && f < (m.SizeBytes ?? 0) * 3) throw new HildeException(HildeErrors.DiskFull);
+        await DownloadOneAsync(m, ct).ConfigureAwait(false);
+    }
+
     public IReadOnlyList<ModelStatus> GetStatus(PerformanceTier tier) =>
         _manifest.ForTier(tier).Select(m =>
         {
             var inst = _installed.Models.GetValueOrDefault(m.Id);
-            bool present = inst != null && File.Exists(inst.Path);
+            bool present = inst != null && PathExists(inst.Path);
             return new ModelStatus(m.Id, m.Kind, m.DisplayName, m.SizeBytes, present,
                 present && inst!.VerifiedAgainstManifest, m.License, !m.Optional);
         }).ToList();
@@ -70,9 +87,9 @@ public sealed class ModelManager : IModelManager
         // Bevorzugt das Modell der gewählten Stufe; sonst irgendein installiertes dieser Art (kein stiller Wechsel
         // auf ein nicht installiertes Modell, aber Weiterarbeit mit dem vorhandenen).
         var preferred = _manifest.Find(kind, tier);
-        if (preferred != null && _installed.Models.TryGetValue(preferred.Id, out var p) && File.Exists(p.Path)) return p.Path;
+        if (preferred != null && _installed.Models.TryGetValue(preferred.Id, out var p) && PathExists(p.Path)) return p.Path;
         foreach (var m in _manifest.Models.Where(m => m.Kind == kind))
-            if (_installed.Models.TryGetValue(m.Id, out var i) && File.Exists(i.Path)) return i.Path;
+            if (_installed.Models.TryGetValue(m.Id, out var i) && PathExists(i.Path)) return i.Path;
         return null;
     }
 
@@ -88,7 +105,7 @@ public sealed class ModelManager : IModelManager
         _manifest.ForTier(tier).Where(m => includeLlm || m.Kind != ModelKind.Llm)
             .Where(m => !IsInstalled(m)).Sum(m => m.SizeBytes ?? 0);
 
-    private bool IsInstalled(ModelEntry m) => _installed.Models.TryGetValue(m.Id, out var i) && File.Exists(i.Path);
+    private bool IsInstalled(ModelEntry m) => _installed.Models.TryGetValue(m.Id, out var i) && PathExists(i.Path);
 
     public async Task DownloadAsync(PerformanceTier tier, bool includeLlm, CancellationToken ct)
     {
@@ -193,10 +210,39 @@ public sealed class ModelManager : IModelManager
             return false;
         }
         if (!verified) _log.Warning("Modell {Model} ohne Manifest-Prüfsumme (nur interner Build) – Hash lokal festgehalten", m.Id);
-        File.Move(part, final, overwrite: true);
-        Register(m, final, hash, verified);
-        Report(m, new FileInfo(final).Length, new FileInfo(final).Length, "done");
+        long size = new FileInfo(part).Length;
+        if (m.Archive != null)
+        {
+            Report(m, 0, null, "extract", message: "Entpacke …");
+            var dir = ExtractArchive(m, part);
+            File.Delete(part);
+            Register(m, dir, hash, verified);
+        }
+        else
+        {
+            File.Move(part, final, overwrite: true);
+            Register(m, final, hash, verified);
+        }
+        Report(m, size, size, "done");
         return true;
+    }
+
+    /// <summary>tar.bz2 in Models/&lt;art&gt;/&lt;id&gt;/ entpacken (Pfade werden gegen Ausbruch geprüft).</summary>
+    private string ExtractArchive(ModelEntry m, string archivePath)
+    {
+        var target = Path.Combine(_paths.ModelDir(m.Kind), m.Id);
+        var tmp = target + ".tmp";
+        if (Directory.Exists(tmp)) Directory.Delete(tmp, true);
+        Directory.CreateDirectory(tmp);
+        using (var fs = File.OpenRead(archivePath))
+        using (var bz = new ICSharpCode.SharpZipLib.BZip2.BZip2InputStream(fs))
+        {
+            // TarFile.ExtractToDirectory prüft selbst, dass keine Einträge außerhalb des Ziels landen.
+            System.Formats.Tar.TarFile.ExtractToDirectory(bz, tmp, overwriteFiles: true);
+        }
+        if (Directory.Exists(target)) Directory.Delete(target, true);
+        Directory.Move(tmp, target);
+        return target;
     }
 
     private void Register(ModelEntry m, string path, string hash, bool verified)
@@ -205,7 +251,8 @@ public sealed class ModelManager : IModelManager
         {
             _installed.Models[m.Id] = new InstalledModel
             {
-                Id = m.Id, Path = path, Sha256 = hash, SizeBytes = new FileInfo(path).Length,
+                Id = m.Id, Path = path, Sha256 = hash,
+                SizeBytes = File.Exists(path) ? new FileInfo(path).Length : Directory.EnumerateFiles(path, "*", SearchOption.AllDirectories).Sum(f => new FileInfo(f).Length),
                 InstalledUtc = DateTime.UtcNow, ManifestVersion = _manifest.ManifestVersion,
                 VerifiedAgainstManifest = verified
             };
@@ -241,6 +288,15 @@ public sealed class ModelManager : IModelManager
                 }
                 var dir = _paths.ModelDir(m.Kind);
                 Directory.CreateDirectory(dir);
+                if (m.Archive != null)
+                {
+                    Report(m, 0, m.SizeBytes, "extract", message: "Entpacke …");
+                    var extracted = ExtractArchive(m, src);
+                    Register(m, extracted, hash, m.Sha256 != null);
+                    Report(m, 1, 1, "done");
+                    count++;
+                    continue;
+                }
                 var dst = Path.Combine(dir, m.FileName);
                 Report(m, 0, m.SizeBytes, "copy", message: "Kopiere …");
                 await using (var s = File.OpenRead(src))
@@ -261,7 +317,8 @@ public sealed class ModelManager : IModelManager
 
     public async Task<bool> VerifyAsync(string modelId, CancellationToken ct)
     {
-        if (!_installed.Models.TryGetValue(modelId, out var inst) || !File.Exists(inst.Path)) return false;
+        if (!_installed.Models.TryGetValue(modelId, out var inst) || !PathExists(inst.Path)) return false;
+        if (Directory.Exists(inst.Path)) return true; // entpackte Archive: geprüft beim Download
         var hash = await HashFileAsync(inst.Path, ct).ConfigureAwait(false);
         var expected = _manifest.Models.FirstOrDefault(m => m.Id == modelId)?.Sha256 ?? inst.Sha256;
         return string.Equals(hash, expected, StringComparison.OrdinalIgnoreCase);
@@ -347,7 +404,19 @@ public sealed class ModelManager : IModelManager
         foreach (var inst in _installed.Models.Values.ToList())
         {
             var entry = _manifest.Models.FirstOrDefault(m => m.Id == inst.Id);
-            if (entry == null || !File.Exists(inst.Path)) continue;
+            if (entry == null || !PathExists(inst.Path)) continue;
+            if (Directory.Exists(inst.Path))
+            {
+                var dirTarget = Path.Combine(newRoot, entry.Kind.ToString().ToLowerInvariant(), entry.Id);
+                if (string.Equals(Path.GetFullPath(dirTarget), Path.GetFullPath(inst.Path), StringComparison.OrdinalIgnoreCase)) continue;
+                CopyDirectory(inst.Path, dirTarget);
+                var oldDir = inst.Path;
+                lock (_stateLock) inst.Path = dirTarget;
+                SaveState();
+                try { Directory.Delete(oldDir, true); } catch (Exception ex) { _log.Warning(ex, "Alten Ordner nicht gelöscht"); }
+                moved++;
+                continue;
+            }
             var dir = Path.Combine(newRoot, entry.Kind.ToString().ToLowerInvariant());
             Directory.CreateDirectory(dir);
             var target = Path.Combine(dir, entry.FileName);
@@ -373,6 +442,15 @@ public sealed class ModelManager : IModelManager
         return moved;
     }
 
+    private static void CopyDirectory(string from, string to)
+    {
+        foreach (var dir in Directory.EnumerateDirectories(from, "*", SearchOption.AllDirectories))
+            Directory.CreateDirectory(Path.Combine(to, Path.GetRelativePath(from, dir)));
+        Directory.CreateDirectory(to);
+        foreach (var file in Directory.EnumerateFiles(from, "*", SearchOption.AllDirectories))
+            File.Copy(file, Path.Combine(to, Path.GetRelativePath(from, file)), overwrite: true);
+    }
+
     /// <summary>Entfernt ein Modell (nur auf ausdrücklichen Wunsch).</summary>
     public void Remove(string modelId)
     {
@@ -380,7 +458,12 @@ public sealed class ModelManager : IModelManager
         {
             if (_installed.Models.Remove(modelId, out var inst))
             {
-                try { File.Delete(inst.Path); } catch (Exception ex) { _log.Warning(ex, "Modell löschen"); }
+                try
+                {
+                    if (Directory.Exists(inst.Path)) Directory.Delete(inst.Path, true);
+                    else File.Delete(inst.Path);
+                }
+                catch (Exception ex) { _log.Warning(ex, "Modell löschen"); }
             }
         }
         SaveState();

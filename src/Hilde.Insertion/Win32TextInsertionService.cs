@@ -119,6 +119,37 @@ public sealed class Win32TextInsertionService : ITextInsertionService
         }
     }
 
+    /// <summary>
+    /// Markierten Text aus dem Zielprogramm holen (Strg+C), danach die Zwischenablage wiederherstellen.
+    /// </summary>
+    public async Task<string?> CopySelectionAsync(InsertionTarget? target)
+    {
+        if (target is Win32InsertionTarget t && t.Root != IntPtr.Zero)
+        {
+            if (t.Console || t.ProcessId == (uint)Environment.ProcessId) return null; // Strg+C würde Konsolen abbrechen
+            if (!IsWindow(t.Root)) return null;
+            EnsureForeground(t);
+        }
+        await WaitForModifiersReleasedAsync(CancellationToken.None).ConfigureAwait(false);
+        bool remote = target?.IsRemoteSession == true;
+        return await StaThread.RunAsync(() =>
+        {
+            ClipboardSnapshot? snapshot = null;
+            try { snapshot = ClipboardSnapshot.Capture(); } catch { }
+            uint seq = GetClipboardSequenceNumber();
+            var keys = new[] { Key(VK_CONTROL, false), Key(0x43, false), Key(0x43, true), Key(VK_CONTROL, true) };
+            SendInput((uint)keys.Length, keys, Marshal.SizeOf<INPUT>());
+            var sw = Stopwatch.StartNew();
+            while (GetClipboardSequenceNumber() == seq && sw.ElapsedMilliseconds < (remote ? 2000 : 900)) Thread.Sleep(30);
+            if (GetClipboardSequenceNumber() == seq) return null;
+            Thread.Sleep(remote ? 150 : 40);
+            string? text = null;
+            try { text = ClipboardSnapshot.Retry(() => System.Windows.Clipboard.ContainsText() ? System.Windows.Clipboard.GetText() : null); } catch { }
+            if (snapshot is { Restorable: true }) { try { snapshot.Restore(); } catch { } }
+            return text;
+        }).ConfigureAwait(false);
+    }
+
     private InsertionOutcome PasteViaClipboard(Win32InsertionTarget t, string text, InsertionSettings s)
     {
         ClipboardSnapshot? snapshot = null;

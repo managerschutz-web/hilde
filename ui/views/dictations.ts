@@ -52,8 +52,11 @@ export function renderDictations(root: HTMLElement): () => void {
     } catch (e) { toast(errorText(e), 'error'); }
   }
 
+  const cleanups: (() => void)[] = [];
+
   async function select(id: string): Promise<void> {
     selected = id;
+    cleanups.splice(0).forEach(f => f());
     try {
       const { record: r, hasAudio, error, audioUrl, segments, keepAudio } = await call<any>('transcripts.get', { id });
       const info = await call<any>('app.info');
@@ -191,6 +194,16 @@ export function renderDictations(root: HTMLElement): () => void {
            h('button', { class: 'btn ai', title: 'Sachlicher und klarer formulieren', onclick: () => rewrite('clarify') }, '◎ Sachlich & klar')]
         : [h('span', { class: 'muted small' }, 'KI-Bearbeitung: Modell in der Einrichtung laden')];
 
+      const readBtn = h('button', { class: 'btn', title: 'Text vorlesen', onclick: async () => {
+        if (readBtn.dataset.reading === '1') { await call('tts.stop'); return; }
+        const t = work.querySelector<HTMLTextAreaElement>('.pane:last-child textarea, textarea');
+        const sel = t && t.selectionEnd > t.selectionStart ? t.value.substring(t.selectionStart, t.selectionEnd) : '';
+        await call('tts.speak', { text: sel || (t?.value ?? '') });
+      } }, '🔊 Vorlesen');
+      const offReading = on('reading', (d: any) => { readBtn.dataset.reading = d.reading ? '1' : ''; readBtn.textContent = d.reading ? '■ Stopp' : '🔊 Vorlesen'; });
+      const offReadErr = on('readError', (d: any) => toast(`${d.message} (${d.errorId})`, 'error', 6000));
+      cleanups.push(offReading, offReadErr);
+
       clear(detail);
       const parts: (Node | null)[] = [
         title,
@@ -199,7 +212,7 @@ export function renderDictations(root: HTMLElement): () => void {
           r.targetApp ? ` · ${r.targetApp}` : '',
           r.fallbackReason ? h('span', { class: 'note' }, ' · ' + r.fallbackReason) : ''),
         error ? h('div', { class: 'banner error' }, `${error} (${r.errorId})`) : null,
-        h('div', { class: 'toolbar' }, tabs, sideBtn, h('span', { class: 'spacer' }), ...aiButtons),
+        h('div', { class: 'toolbar' }, tabs, sideBtn, h('span', { class: 'spacer' }), readBtn, ...aiButtons),
         work, suggestBox, audioBox,
         h('div', { class: 'row' },
           h('button', { class: 'btn primary', onclick: async () => { await call('transcripts.copy', { id, variant: sideBySide ? 'final' : variant }); toast('Kopiert', 'ok'); } }, 'Kopieren'),
@@ -244,5 +257,5 @@ export function renderDictations(root: HTMLElement): () => void {
 
   const off = on('transcript', () => load());
   load();
-  return off;
+  return () => { off(); cleanups.splice(0).forEach(f => f()); };
 }

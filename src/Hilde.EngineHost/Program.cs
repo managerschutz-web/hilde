@@ -44,6 +44,7 @@ internal static class Program
         {
             "speech" => new WhisperEngineHandler(model, gpu, threads, Log.Logger),
             "language" => new LlamaEngineHandler(model, gpu, threads, Log.Logger),
+            "tts" => new Hilde.EngineHost.Tts.SherpaTtsHandler(model, threads, Log.Logger),
             _ => throw new ArgumentException("Unbekannte Engine: " + kind)
         };
 

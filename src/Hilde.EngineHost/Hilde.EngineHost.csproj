@@ -15,6 +15,7 @@
     <PackageReference Include="Serilog" />
     <PackageReference Include="Serilog.Sinks.File" />
     <!-- Native Laufzeiten nur im Engine-Prozess (HILDE.exe selbst lädt keine KI-Bibliotheken) -->
+    <PackageReference Include="org.k2fsa.sherpa.onnx" />
     <PackageReference Include="Whisper.net.Runtime" />
     <PackageReference Include="Whisper.net.Runtime.Vulkan" />
     <PackageReference Include="LLamaSharp.Backend.Vulkan" ExcludeAssets="native" GeneratePathProperty="true" />

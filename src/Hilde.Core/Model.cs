@@ -6,7 +6,7 @@ public enum RecordingMode { PushToTalk, HandsFree }
 
 public enum TextMode { Original, Clean, Professional }
 
-public enum ModelKind { Whisper, Llm, Vad, Diarization }
+public enum ModelKind { Whisper, Llm, Vad, Diarization, Tts }
 
 public enum PerformanceTier { Light, Standard }
 

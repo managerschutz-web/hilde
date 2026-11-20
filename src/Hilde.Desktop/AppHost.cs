@@ -27,6 +27,8 @@ public sealed class AppHost : IAsyncDisposable
     private ModelManager _models = null!;
     private EngineProcessClient _speechClient = null!;
     private EngineProcessClient _llmClient = null!;
+    private ReadAloudService _reader = null!;
+    private InsertionTarget? _menuTarget;
     private RemoteSpeechEngine _speech = null!;
     private TextProcessingPipeline _text = null!;
     private SileroVoiceActivityDetector _vad = null!;
@@ -73,6 +75,14 @@ public sealed class AppHost : IAsyncDisposable
         _llmClient = new EngineProcessClient(EngineKind.Language, engineExe, () =>
             _models.GetInstalledPath(ModelKind.Llm, Tier) is { } p ? new EngineLaunchOptions(p, _settings.Current.UseGpu, threads) : null,
             Log.Logger);
+        _reader = new ReadAloudService(new EngineProcessClient(EngineKind.Tts, engineExe, () =>
+            VoicePath() is { } v ? new EngineLaunchOptions(v, false, 2) : null, Log.Logger), _paths, _settings);
+        _reader.ReadingChanged += reading => _ui.InvokeAsync(() =>
+        {
+            _pill?.SetReading(reading, _settings.Current.ReadAloud.DisplayName);
+            _bridge.Emit("reading", new { reading });
+        });
+        MainWindow.ReadAloudHandler = text => _ = SpeakSafeAsync(text);
         ApplyIdleUnload(_settings.Current);
 
         _speech = new RemoteSpeechEngine(_speechClient);
@@ -107,6 +117,13 @@ public sealed class AppHost : IAsyncDisposable
         {
             _hook = new LowLevelKeyboardHook(_controller.Gestures, a => _controller.Post(a),
                 () => _settings.Current.Hotkey.VirtualKey, () => _settings.Current.Hotkey.EscapeCancels, Log.Logger);
+            _hook.ReadKey = () => _settings.Current.ReadAloud.VirtualKey;
+            _hook.ReadKeyPressed += () =>
+            {
+                if (_reader.IsReading) { _reader.Stop(); return; }
+                var target = _insertion.CaptureTarget();
+                _ = Task.Run(() => ReadSelectionAsync(target));
+            };
             _hook.Start();
         }
         catch (Exception ex)
@@ -136,7 +153,20 @@ public sealed class AppHost : IAsyncDisposable
         var s = _settings.Current;
         _pill = new PillWindow { Topmost = s.Pill.Topmost, Opacity = s.Pill.Opacity };
         _pill.ApplyColors(s.Pill.BackgroundColor, s.Pill.AccentColor);
-        _pill.MicClicked += () => _controller.ToggleHandsFree();
+        _pill.MicClicked += () =>
+        {
+            if (_reader.IsReading) _reader.Stop();
+            else _controller.ToggleHandsFree();
+        };
+        _pill.MenuOpening += () => _menuTarget = _insertion.CaptureTarget();
+        _pill.ReadSelectionRequested += () => { var t = _menuTarget; _ = Task.Run(() => ReadSelectionAsync(t)); };
+        _pill.ReadClipboardRequested += () =>
+        {
+            string text = "";
+            try { if (Clipboard.ContainsText()) text = Clipboard.GetText(); } catch { }
+            _ = SpeakSafeAsync(text);
+        };
+        _pill.StopReadingRequested += () => _reader.Stop();
         _pill.ExpandClicked += ShowMainWindow;
         _pill.QuitRequested += Quit;
         _pill.PauseClicked += () => _controller.TogglePause();
@@ -197,6 +227,7 @@ public sealed class AppHost : IAsyncDisposable
         var idle = TimeSpan.FromMinutes(Math.Clamp(s.ModelIdleUnloadMinutes, 1, 240));
         _speechClient.IdleUnload = idle;
         _llmClient.IdleUnload = idle;
+        if (_reader != null) _reader.Client.IdleUnload = idle;
     }
 
     private void OnStatus(object? sender, StatusEventArgs e)
@@ -222,6 +253,41 @@ public sealed class AppHost : IAsyncDisposable
             if (_settings.Current.TextMode != TextMode.Original && _llmClient.HasModel && !_llmClient.IsRunning)
                 _ = _llmClient.WarmUpAsync(CancellationToken.None);
         });
+    }
+
+    private string? VoicePath()
+    {
+        var id = _settings.Current.ReadAloud.VoiceId;
+        return _models.GetInstalledPathById(id)
+               ?? _models.Entries(ModelKind.Tts).Select(e => _models.GetInstalledPathById(e.Id)).FirstOrDefault(p => p != null);
+    }
+
+    private async Task ReadSelectionAsync(InsertionTarget? target)
+    {
+        string? text = null;
+        try { text = await _insertion.CopySelectionAsync(target); }
+        catch (Exception ex) { _log.Debug(ex, "Markierung lesen"); }
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            _ = _ui.InvokeAsync(() => _tray?.Notify("HILDE", HildeErrors.NothingSelected.Message + " " + HildeErrors.NothingSelected.Hint));
+            return;
+        }
+        await SpeakSafeAsync(text);
+    }
+
+    private async Task SpeakSafeAsync(string text)
+    {
+        try { await _reader.SpeakAsync(text); }
+        catch (HildeException ex)
+        {
+            _ = _ui.InvokeAsync(() => _tray?.Notify("HILDE", ex.Error.Message + (ex.Error.Hint is { } h ? " " + h : "")));
+            _bridge.Emit("readError", new { message = ex.Error.Message, errorId = ex.Error.Id });
+        }
+        catch (Exception ex)
+        {
+            _log.Warning(ex, "Vorlesen fehlgeschlagen");
+            _bridge.Emit("readError", new { message = "Vorlesen ist fehlgeschlagen.", errorId = HildeErrors.Unexpected.Id });
+        }
     }
 
     /// <summary>HILDE vollständig beenden (Engines werden mit beendet).</summary>
@@ -252,6 +318,25 @@ public sealed class AppHost : IAsyncDisposable
             state = _controller.State,
             llm = _text.IsAvailable,
         });
+        b.Register("tts.voices", _ => _models.Entries(ModelKind.Tts).Select(e => new
+        {
+            e.Id, e.DisplayName, e.SizeBytes, e.License,
+            installed = _models.GetInstalledPathById(e.Id) != null,
+            selected = e.Id == _settings.Current.ReadAloud.VoiceId
+        }).ToList());
+        b.Register("tts.speak", p => { _ = SpeakSafeAsync(p.Str("text") ?? ""); return null; });
+        b.Register("tts.stop", _ => { _reader.Stop(); return null; });
+        b.Register("tts.state", _ => new { reading = _reader.IsReading });
+        b.RegisterAsync("tts.download", async p =>
+        {
+            var id = p.Str("id") ?? "";
+            try
+            {
+                await _models.DownloadModelAsync(id, CancellationToken.None);
+                return new { ok = true, message = (string?)null };
+            }
+            catch (HildeException ex) { return new { ok = false, message = (string?)(ex.Error.Message) }; }
+        });
         b.Register("app.quit", _ => { Quit(); return null; });
         b.Register("app.openLogs", _ => { OpenFolder(_paths.Logs); return null; });
         b.Register("app.openData", _ => { OpenFolder(_paths.Root); return null; });
@@ -270,7 +355,7 @@ public sealed class AppHost : IAsyncDisposable
             _settings.Save(s);
             return _settings.Current;
         });
-        b.RegisterAsync("hotkey.capture", async _ =>
+        b.RegisterAsync("hotkey.capture", async p =>
         {
             if (_hook == null) return new { ok = false, message = "Hotkey nicht verfügbar." };
             var tcs = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -282,6 +367,9 @@ public sealed class AppHost : IAsyncDisposable
                 var done = await Task.WhenAny(tcs.Task, Task.Delay(10000));
                 if (done != tcs.Task) return new { ok = false, message = "Keine Taste gedrückt." };
                 var vk = tcs.Task.Result;
+                bool forRead = p.Str("target") == "read";
+                int other = forRead ? _settings.Current.Hotkey.VirtualKey : _settings.Current.ReadAloud.VirtualKey;
+                if (vk == other) return new { ok = false, message = "Diese Taste ist schon für " + (forRead ? "das Diktieren" : "das Vorlesen") + " belegt." };
                 if (!HotkeyNames.IsAllowed(vk))
                     return new { ok = false, message = $"„{HotkeyNames.Name(vk)}“ wird zum Schreiben gebraucht. Bitte z. B. Strg rechts, Pause oder F13–F24 wählen." };
                 return new { ok = true, vk, name = HotkeyNames.Name(vk) };
@@ -707,6 +795,7 @@ public sealed class AppHost : IAsyncDisposable
     {
         _downloadCts?.Cancel();
         if (_controller != null) await _controller.DisposeAsync().ConfigureAwait(false);
+        try { if (_reader != null) await _reader.DisposeAsync().ConfigureAwait(false); } catch { }
         try { await _speechClient.DisposeAsync().ConfigureAwait(false); } catch { }
         try { await _llmClient.DisposeAsync().ConfigureAwait(false); } catch { }
         _audio?.Dispose();

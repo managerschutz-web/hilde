@@ -24,6 +24,7 @@ public static class EngineProtocol
         public const string Transcribe = "transcribe";
         public const string Generate = "generate";
         public const string Shutdown = "shutdown";
+        public const string Speak = "speak";
     }
 }
 
@@ -39,6 +40,10 @@ public sealed record GenerateParams(string Prompt, int MaxTokens, IReadOnlyList<
 
 public sealed record GenerateResult(string Text, int Tokens, double Seconds);
 
+public sealed record SpeakParams(string Text, float Speed, string OutPath);
+
+public sealed record SpeakResult(int SampleRate, double Seconds, double ComputeSeconds);
+
 public sealed record EngineLaunchOptions(string ModelPath, bool UseGpu, int Threads);
 
-public enum EngineKind { Speech, Language }
+public enum EngineKind { Speech, Language, Tts }

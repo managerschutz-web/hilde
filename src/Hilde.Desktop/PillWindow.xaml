@@ -9,7 +9,11 @@
             Background="#D9161A22" BorderBrush="#33FFFFFF" BorderThickness="1"
             MouseLeftButtonDown="OnDragStart" ToolTip="HILDE – Strg rechts halten und sprechen">
         <Border.ContextMenu>
-            <ContextMenu>
+            <ContextMenu Opened="OnMenuOpened">
+                <MenuItem Header="Markierten Text vorlesen" Click="OnMenuReadSelection"/>
+                <MenuItem Header="Zwischenablage vorlesen" Click="OnMenuReadClipboard"/>
+                <MenuItem x:Name="StopReadItem" Header="Vorlesen stoppen" Click="OnMenuStopReading" Visibility="Collapsed"/>
+                <Separator/>
                 <MenuItem Header="HILDE öffnen" Click="OnMenuOpen"/>
                 <MenuItem Header="Pill ausblenden" Click="OnMenuHide"/>
                 <Separator/>

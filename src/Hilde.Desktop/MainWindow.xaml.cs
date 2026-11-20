@@ -10,6 +10,9 @@ namespace Hilde.Desktop;
 public partial class MainWindow : Window
 {
     public const string Host = "app.hilde.example"; // reservierte Domain, verlässt nie den Rechner
+    /// <summary>Wird von AppHost gesetzt: markierten Text vorlesen.</summary>
+    public static Action<string>? ReadAloudHandler { get; set; }
+
     public const string AudioHost = "audio.hilde.example"; // lokale Aufnahmen für die Wiedergabe im Archiv
     private readonly HildePaths _paths;
     private readonly UiBridge _bridge;
@@ -50,6 +53,16 @@ public partial class MainWindow : Window
                 if (!e.Uri.StartsWith($"https://{Host}/", StringComparison.OrdinalIgnoreCase)) e.Cancel = true;
             };
             core.NewWindowRequested += (_, e) => e.Handled = true;
+            // Rechtsklick auf markierten Text: „Mit HILDE vorlesen“
+            core.ContextMenuRequested += (_, e) =>
+            {
+                if (!e.ContextMenuTarget.HasSelection || ReadAloudHandler == null) return;
+                var text = e.ContextMenuTarget.SelectionText;
+                var item = env.CreateContextMenuItem("🔊 Mit HILDE vorlesen", null, CoreWebView2ContextMenuItemKind.Command);
+                item.CustomItemSelected += (_, _) => ReadAloudHandler?.Invoke(text);
+                e.MenuItems.Insert(0, item);
+                e.MenuItems.Insert(1, env.CreateContextMenuItem("", null, CoreWebView2ContextMenuItemKind.Separator));
+            };
             core.WebMessageReceived += (_, e) => _bridge.OnMessage(e.WebMessageAsJson);
             _bridge.Attach(json => Dispatcher.InvokeAsync(() =>
             {

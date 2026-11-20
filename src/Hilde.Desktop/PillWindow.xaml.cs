@@ -42,6 +42,11 @@ public partial class PillWindow : Window
     public event Action<double, double>? PositionChanged;
     public event Action? HideRequested;
     public event Action? PauseClicked;
+    public event Action? MenuOpening;
+    public event Action? ReadSelectionRequested;
+    public event Action? ReadClipboardRequested;
+    public event Action? StopReadingRequested;
+    private bool _reading;
     public event Action? QuitRequested;
 
     public PillWindow()
@@ -145,6 +150,7 @@ public partial class PillWindow : Window
 
     public void SetStatus(StatusEventArgs e)
     {
+        if (_reading && e.State is HildeState.Ready or HildeState.Done) return; // Vorlese-Anzeige behalten
         // Kurze Tipps auf die Taste sollen keine Aufnahme-Anzeige aufblitzen lassen.
         if (e.State == HildeState.Recording && e.Mode == RecordingMode.PushToTalk && _state != HildeState.Recording)
         {
@@ -224,6 +230,36 @@ public partial class PillWindow : Window
     private void OnMicClick(object sender, MouseButtonEventArgs e) { e.Handled = true; MicClicked?.Invoke(); }
 
     private void OnPauseClick(object sender, MouseButtonEventArgs e) { e.Handled = true; PauseClicked?.Invoke(); }
+
+    private void OnMenuOpened(object sender, RoutedEventArgs e) { }
+    private void OnMenuReadSelection(object sender, RoutedEventArgs e) => ReadSelectionRequested?.Invoke();
+    private void OnMenuReadClipboard(object sender, RoutedEventArgs e) => ReadClipboardRequested?.Invoke();
+    private void OnMenuStopReading(object sender, RoutedEventArgs e) => StopReadingRequested?.Invoke();
+
+    /// <summary>Ziel merken, bevor das Menü den Fokus beeinflusst (Rechtsklick).</summary>
+    protected override void OnPreviewMouseRightButtonDown(MouseButtonEventArgs e)
+    {
+        MenuOpening?.Invoke();
+        base.OnPreviewMouseRightButtonDown(e);
+    }
+
+    /// <summary>Vorlese-Anzeige in der Pill.</summary>
+    public void SetReading(bool reading, string keyName)
+    {
+        _reading = reading;
+        StopReadItem.Visibility = reading ? Visibility.Visible : Visibility.Collapsed;
+        if (reading)
+        {
+            StatusDot.Fill = Green;
+            StatusText.Text = $"🔊 Liest vor – {keyName} oder Klick stoppt";
+            MicButton.ToolTip = "Vorlesen stoppen";
+        }
+        else
+        {
+            MicButton.ToolTip = "Freihand-Diktat starten/beenden";
+            Apply(new StatusEventArgs(_state));
+        }
+    }
 
     private void OnMenuOpen(object sender, RoutedEventArgs e) => ExpandClicked?.Invoke();
     private void OnMenuHide(object sender, RoutedEventArgs e) => HideRequested?.Invoke();

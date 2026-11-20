@@ -1,6 +1,6 @@
 {
-  "manifestVersion": 1,
-  "updated": "2026-11-19",
+  "manifestVersion": 2,
+  "updated": "2026-11-20",
   "models": [
     {
       "id": "silero-vad-v5",
@@ -91,6 +91,57 @@
       "compatibility": "llama.cpp GGUF, LLamaSharp 0.25, Chat-Vorlage Gemma",
       "promptFormat": "gemma",
       "optional": true
+    },
+    {
+      "id": "tts-de-kerstin-low",
+      "displayName": "Stimme Kerstin (weiblich, Standard)",
+      "kind": "tts",
+      "tiers": [],
+      "fileName": "vits-piper-de_DE-kerstin-low.tar.bz2",
+      "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-de_DE-kerstin-low.tar.bz2",
+      "sizeBytes": 65000000,
+      "sha256": null,
+      "license": "Piper-Stimme (MIT) / Trainingsdaten siehe Modellkarte",
+      "licenseUrl": "https://github.com/rhasspy/piper/blob/master/VOICES.md",
+      "licenseStatus": "zu prüfen",
+      "architecture": "any (CPU)",
+      "compatibility": "sherpa-onnx OfflineTts (VITS/Piper), tokens.txt + espeak-ng-data im Archiv",
+      "optional": false,
+      "archive": "tar.bz2"
+    },
+    {
+      "id": "tts-de-thorsten-high",
+      "displayName": "Stimme Thorsten (männlich, hohe Qualität)",
+      "kind": "tts",
+      "tiers": [],
+      "fileName": "vits-piper-de_DE-thorsten-high.tar.bz2",
+      "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-de_DE-thorsten-high.tar.bz2",
+      "sizeBytes": 115000000,
+      "sha256": null,
+      "license": "Piper-Stimme (MIT) / Trainingsdaten siehe Modellkarte",
+      "licenseUrl": "https://github.com/rhasspy/piper/blob/master/VOICES.md",
+      "licenseStatus": "zu prüfen",
+      "architecture": "any (CPU)",
+      "compatibility": "sherpa-onnx OfflineTts (VITS/Piper), tokens.txt + espeak-ng-data im Archiv",
+      "optional": true,
+      "archive": "tar.bz2"
+    },
+    {
+      "id": "tts-de-ramona-low",
+      "displayName": "Stimme Ramona (weiblich)",
+      "kind": "tts",
+      "tiers": [],
+      "fileName": "vits-piper-de_DE-ramona-low.tar.bz2",
+      "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-de_DE-ramona-low.tar.bz2",
+      "sizeBytes": 65000000,
+      "sha256": null,
+      "license": "Piper-Stimme (MIT) / Trainingsdaten siehe Modellkarte",
+      "licenseUrl": "https://github.com/rhasspy/piper/blob/master/VOICES.md",
+      "licenseStatus": "zu prüfen",
+      "architecture": "any (CPU)",
+      "compatibility": "sherpa-onnx OfflineTts (VITS/Piper), tokens.txt + espeak-ng-data im Archiv",
+      "optional": true,
+      "archive": "tar.bz2"
     }
   ],
   "note": "sizeBytes sind Richtwerte, sha256 null = noch nicht festgeschrieben. scripts/update-manifest.ps1 trägt exakte Größen und Prüfsummen ein; Freigabe-Builds brechen ab, solange ein Wert fehlt."

@@ -25,6 +25,10 @@ public static class HildeErrors
         "Der Download ist fehlgeschlagen.", "Er kann später fortgesetzt werden.");
     public static readonly Entry DiskFull = new("H-MOD-005",
         "Nicht genug freier Speicherplatz.");
+    public static readonly Entry VoiceMissing = new("H-MOD-006",
+        "Die Vorlesestimme ist noch nicht installiert.", "Einstellungen › Vorlesen › Stimme laden.");
+    public static readonly Entry NothingSelected = new("H-INS-005",
+        "Es ist kein Text markiert.", "Text markieren und erneut drücken – oder „Zwischenablage vorlesen“ wählen.");
 
     public static readonly Entry SpeechEngineFailed = new("H-ENG-001",
         "Die Spracherkennung ist abgestürzt und wurde neu gestartet. Die Aufnahme ist gesichert.",

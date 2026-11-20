@@ -46,6 +46,8 @@ public sealed class ModelEntry
     public string Compatibility { get; set; } = "";
     public string? PromptFormat { get; set; }
     public bool Optional { get; set; }
+    /// <summary>"tar.bz2" = Archiv, das nach der Prüfung in einen Ordner entpackt wird (z. B. Stimmen).</summary>
+    public string? Archive { get; set; }
 }
 
 /// <summary>Config/models.json – was lokal installiert und geprüft ist.</summary>

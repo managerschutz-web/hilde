@@ -30,6 +30,7 @@ public sealed class HildeSettings
     /// <summary>„neuer Absatz“, „neue Zeile“, „Doppelpunkt“.</summary>
     public bool DictationCommands { get; set; } = true;
     public FormatSettings Format { get; set; } = new();
+    public ReadAloudSettings ReadAloud { get; set; } = new();
     public int ModelIdleUnloadMinutes { get; set; } = 5;
     public bool Autostart { get; set; }
     /// <summary>"system", "light", "dark".</summary>
@@ -54,6 +55,16 @@ public sealed class HotkeySettings
     /// <summary>Kürzer gehalten = Tipp (keine Aufnahme).</summary>
     public int MinHoldMs { get; set; } = 250;
     public bool EscapeCancels { get; set; } = true;
+}
+
+public sealed class ReadAloudSettings
+{
+    /// <summary>Modell-ID der Stimme (Standard: Kerstin, weiblich).</summary>
+    public string VoiceId { get; set; } = "tts-de-kerstin-low";
+    public double Speed { get; set; } = 1.0;
+    /// <summary>Taste zum Vorlesen von markiertem Text (Standard F9).</summary>
+    public int VirtualKey { get; set; } = 0x78;
+    public string DisplayName { get; set; } = "F9";
 }
 
 public sealed class FormatSettings

@@ -160,6 +160,8 @@ input[role="switch"]:checked::after { left: 21px; }
 .seg:hover { border-color: var(--accent); }
 .seg-time { color: var(--muted); margin-right: 6px; font-variant-numeric: tabular-nums; }
 .span2 { grid-column: 1 / -1; }
+.voice { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-top: 1px solid var(--border); }
+.voice:first-of-type { border-top: 0; }
 .snippets { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 10px; margin: 10px 0 14px; }
 .snippet { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; background: var(--surface-2); }
 .snippet-head { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }

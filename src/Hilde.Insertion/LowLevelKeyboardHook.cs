@@ -44,6 +44,11 @@ public sealed class LowLevelKeyboardHook : IDisposable
     private IntPtr _hook;
     private bool _triggerDown;
     private volatile bool _paused;
+    private bool _readDown;
+
+    /// <summary>Taste zum Vorlesen von markiertem Text (wird nicht an das Programm weitergereicht).</summary>
+    public Func<int>? ReadKey { get; set; }
+    public event Action? ReadKeyPressed;
 
     public LowLevelKeyboardHook(GestureRecognizer gestures, Action<GestureAction> dispatch,
         Func<int> triggerKey, Func<bool> escapeEnabled, ILogger log)
@@ -107,6 +112,12 @@ public sealed class LowLevelKeyboardHook : IDisposable
             }
             if (_paused) return CallNextHookEx(IntPtr.Zero, nCode, wParam, lParam);
 
+            if (ReadKey != null && vk == ReadKey() && vk != _triggerKey())
+            {
+                if (down && !_readDown) { _readDown = true; ReadKeyPressed?.Invoke(); }
+                else if (up) _readDown = false;
+                return (IntPtr)1;
+            }
             if (vk == _triggerKey())
             {
                 if (down && !_triggerDown) { _triggerDown = true; GestureAction a; lock (_gestures) a = _gestures.TriggerDown(now); _dispatch(a); }

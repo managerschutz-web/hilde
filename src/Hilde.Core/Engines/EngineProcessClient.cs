@@ -51,7 +51,7 @@ public sealed class EngineProcessClient : IAsyncDisposable
         _idleTimer = new Timer(_ => _ = CheckIdleAsync(), null, TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(30));
     }
 
-    public bool HasModel => _options() is { } o && File.Exists(o.ModelPath);
+    public bool HasModel => _options() is { } o && (File.Exists(o.ModelPath) || Directory.Exists(o.ModelPath));
 
     public async Task<T> CallAsync<T>(string method, object? parameters, TimeSpan timeout, CancellationToken ct)
     {
@@ -112,12 +112,19 @@ public sealed class EngineProcessClient : IAsyncDisposable
         catch (Exception ex) { _log.Debug(ex, "WarmUp"); }
     }
 
+    private HildeErrors.Entry MissingError() => _kind switch
+    {
+        EngineKind.Speech => HildeErrors.WhisperModelMissing,
+        EngineKind.Tts => HildeErrors.VoiceMissing,
+        _ => HildeErrors.LlmModelMissing
+    };
+
     private async Task EnsureStartedAsync(CancellationToken ct)
     {
         var opts = _options() ?? throw new HildeException(
-            _kind == EngineKind.Speech ? HildeErrors.WhisperModelMissing : HildeErrors.LlmModelMissing);
-        if (!File.Exists(opts.ModelPath))
-            throw new HildeException(_kind == EngineKind.Speech ? HildeErrors.WhisperModelMissing : HildeErrors.LlmModelMissing);
+            MissingError());
+        if (!File.Exists(opts.ModelPath) && !Directory.Exists(opts.ModelPath))
+            throw new HildeException(MissingError());
         if (_forceCpu) opts = opts with { UseGpu = false };
 
         if (IsRunning && _runningWith == opts && _pipe is { IsConnected: true }) return;

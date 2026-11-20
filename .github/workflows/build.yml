@@ -71,6 +71,9 @@ jobs:
           if (-not (Test-Path artifacts/app/Hilde.Engine.exe)) { throw "Hilde.Engine.exe fehlt" }
           if (-not (Test-Path artifacts/app/ui/dist/main.js)) { throw "Oberfläche fehlt" }
           Get-ChildItem artifacts/app -Recurse -Include *.pdb | Remove-Item
+          Write-Host "Native Laufzeiten:"
+          Get-ChildItem artifacts/app -Recurse -Include sherpa*.dll,onnxruntime*.dll,whisper.dll,llama.dll | ForEach-Object { $_.FullName.Replace((Resolve-Path artifacts/app).Path, '') + "  " + $_.VersionInfo.FileVersion }
+          if (-not (Get-ChildItem artifacts/app -Recurse -Filter sherpa-onnx-c-api.dll)) { throw "sherpa-onnx fehlt (Vorlesen)" }
 
       - name: Modellmanifest für Freigaben prüfen
         if: steps.ver.outputs.release == 'true'

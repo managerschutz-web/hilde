@@ -322,6 +322,7 @@ public sealed class DictationController : IAsyncDisposable
             {
                 var err = HildeErrors.Get(outcome.ErrorId);
                 record.ErrorId = err.Id;
+                _log.Information("Einfügen nicht möglich: {ErrorId} ({Detail}) Ziel {Target}", err.Id, outcome.Detail ?? "-", ctx.Target.Description);
                 CopyFallbackRequested?.Invoke(this, new CopyFallbackEventArgs(clean, err.Id, err.Message));
                 doneMessage = "Bereit zum Kopieren";
             }

@@ -178,3 +178,14 @@ public class HallucinationFilterTests
     [Fact] public void Removes_trailing_phrase() => Assert.Equal("Bitte rufen Sie mich an.", HallucinationFilter.Clean("Bitte rufen Sie mich an. Vielen Dank fürs Zuschauen!"));
     [Fact] public void Keeps_normal_thanks() => Assert.Equal("Vielen Dank für Ihre Hilfe.", HallucinationFilter.Clean("Vielen Dank für Ihre Hilfe."));
 }
+
+public class SmartCleanTests
+{
+    [Theory]
+    [InlineData("Bitte schicken Sie mir die Unterlagen bis Freitag.", false)]
+    [InlineData("Der Termin ist am Dienstag, nein, am Mittwoch.", true)]
+    [InlineData("Ich ich komme morgen vorbei.", true)]
+    [InlineData("das ist ein langer text ohne jedes satzzeichen weil die erkennung keine gesetzt hat und so weiter", true)]
+    public void Decides_when_model_is_needed(string text, bool expected) =>
+        Assert.Equal(expected, TextProcessingPipeline.NeedsModel(text));
+}

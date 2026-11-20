@@ -39,6 +39,8 @@ public static partial class OutputValidator
         "here is", "here's", "cleaned text", "corrected text", "text:", "ergebnis:"
     ];
 
+    public static bool HasCorrectionMarker(string text) => CorrectionMarkerRx().IsMatch(text);
+
     /// <summary>Entfernt Verpackung, die Modelle gern hinzufügen.</summary>
     public static string Normalize(string output, string input)
     {

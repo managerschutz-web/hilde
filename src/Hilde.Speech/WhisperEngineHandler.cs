@@ -37,6 +37,13 @@ public sealed class WhisperEngineHandler : IEngineHandler
         RuntimeOptions.RuntimeLibraryOrder = _useGpu
             ? [RuntimeLibrary.Vulkan, RuntimeLibrary.Cpu]
             : [RuntimeLibrary.Cpu];
+        LogProvider.AddLogger((level, message) =>
+        {
+            if (message != null && (message.Contains("Vulkan", StringComparison.OrdinalIgnoreCase)
+                || message.Contains("backend", StringComparison.OrdinalIgnoreCase)
+                || message.Contains("GPU", StringComparison.Ordinal)))
+                _log.Information("whisper.cpp: {Msg}", message.Trim());
+        });
         _factory = WhisperFactory.FromPath(_modelPath);
         _backend = _useGpu ? "Vulkan (Fallback CPU)" : "CPU";
         _log.Information("Whisper geladen ({Backend})", _backend);
@@ -59,6 +66,7 @@ public sealed class WhisperEngineHandler : IEngineHandler
         builder = p.Language is "de" or "en" ? builder.WithLanguage(p.Language) : builder.WithLanguageDetection();
         if (!string.IsNullOrWhiteSpace(p.Prompt)) builder = builder.WithPrompt(p.Prompt);
 
+        var sw = System.Diagnostics.Stopwatch.StartNew();
         await using var processor = builder.Build();
         await using var fs = File.OpenRead(p.WavPath);
         var segments = new List<TimedSegment>();
@@ -73,6 +81,7 @@ public sealed class WhisperEngineHandler : IEngineHandler
             text.Append(t);
             if (!string.IsNullOrEmpty(seg.Language)) detected = seg.Language;
         }
+        _log.Information("Whisper: {Sec:F2}s für {Segments} Segmente", sw.Elapsed.TotalSeconds, segments.Count);
         return new SpeechResult(text.ToString().Trim(), detected, segments);
     }
 

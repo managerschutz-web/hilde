@@ -39,7 +39,16 @@ public sealed class LlamaEngineHandler : IEngineHandler
         if (!_nativeConfigured)
         {
             // Muss vor dem ersten nativen Aufruf passieren.
-            NativeLibraryConfig.All.WithVulkan(_useGpu).WithAutoFallback(true);
+            NativeLibraryConfig.All.WithVulkan(_useGpu).WithAutoFallback(true)
+                .WithLogCallback((level, message) =>
+                {
+                    // Nur Geräte-/Offload-Zeilen festhalten (Diagnose GPU ja/nein), keine Inhalte.
+                    if (message.Contains("Vulkan", StringComparison.OrdinalIgnoreCase)
+                        || message.Contains("offload", StringComparison.OrdinalIgnoreCase)
+                        || message.Contains("ggml_vulkan", StringComparison.OrdinalIgnoreCase)
+                        || message.Contains("CPU_REPACK", StringComparison.OrdinalIgnoreCase))
+                        _log.Information("llama.cpp: {Msg}", message.Trim());
+                });
             _nativeConfigured = true;
         }
         _params = new ModelParams(_modelPath)
@@ -83,6 +92,7 @@ public sealed class LlamaEngineHandler : IEngineHandler
             var idx = text.IndexOf(stop, StringComparison.Ordinal);
             if (idx >= 0) text = text[..idx];
         }
+        _log.Information("LLM: {Tokens} Tokens in {Sec:F2}s (Prompt {PromptChars} Zeichen)", tokens, sw.Elapsed.TotalSeconds, p.Prompt.Length);
         return new GenerateResult(text.Trim(), tokens, sw.Elapsed.TotalSeconds);
     }
 

@@ -30,6 +30,9 @@ public sealed partial class TextProcessingPipeline : ITextProcessingEngine
     {
         var baseline = DeterministicCleaner.Clean(request.Text, request.Language);
         if (request.Mode == TextMode.Original) return new TextResult(request.Text, false, null);
+        // „Bereinigt“: Füllwörter/Satzzeichen erledigen Whisper + Regeln in Millisekunden.
+        // Die KI wird nur bemüht, wenn es Selbstkorrekturen, Stotterer oder fehlende Satzzeichen gibt.
+        if (request.Mode == TextMode.Clean && !NeedsModel(request.Text)) return new TextResult(baseline, false, null);
         if (!IsAvailable) return new TextResult(baseline, false, "Kein KI-Modell eingerichtet");
 
         var chunks = SplitIntoChunks(request.Text, 1200);
@@ -81,6 +84,17 @@ public sealed partial class TextProcessingPipeline : ITextProcessingEngine
     }
 
     [GeneratedRegex(@"(?<=[.!?…])\s+")] private static partial Regex SentenceBoundary();
+    [GeneratedRegex(@"\b(\p{L}{2,})[\s,]+\1\b", RegexOptions.IgnoreCase)] private static partial Regex Stutter();
+    [GeneratedRegex(@"[.!?,;:]")] private static partial Regex AnyPunctuation();
+
+    /// <summary>Braucht ein Diktat im Modus „Bereinigt“ die KI?</summary>
+    internal static bool NeedsModel(string text)
+    {
+        if (OutputValidator.HasCorrectionMarker(text)) return true;
+        if (Stutter().IsMatch(text)) return true;
+        int words = text.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length;
+        return words > 12 && !AnyPunctuation().IsMatch(text);
+    }
 
     internal static List<string> SplitIntoChunks(string text, int maxChars)
     {

@@ -74,7 +74,10 @@ export function renderSettings(root: HTMLElement): () => void {
       const installed = models.models.filter((m: any) => m.installed).length;
 
       root.append(
-        h('header', { class: 'view-head' }, h('div', null, h('h1', null, 'Einstellungen'), h('p', { class: 'muted' }, 'Änderungen werden sofort gespeichert.'))),
+        h('header', { class: 'view-head' }, h('div', null, h('h1', null, 'Einstellungen'), h('p', { class: 'muted' }, 'Änderungen werden sofort gespeichert.')),
+          h('div', { class: 'row tight' },
+            h('button', { class: 'btn', onclick: () => call('app.openLogs') }, 'Protokolle öffnen'),
+            h('button', { class: 'btn', onclick: () => call('app.openData') }, 'Datenordner'))),
         h('div', { class: 'settings' },
           section('Diktat',
             h('div', { class: 'field inline' }, h('span', null, 'Diktiertaste'), hotkeyBtn),

@@ -31,7 +31,7 @@ function show(startStep: number, onDone: () => void): void {
     clear(panel);
     const progress = h('ol', { class: 'steps' }, steps.map((t, i) => h('li', { class: i + 1 === step ? 'current' : i + 1 < step ? 'done' : '' }, t)));
     const body = h('div', { class: 'wizard-body' });
-    panel.append(h('div', { class: 'wizard-head' }, h('img', { src: 'assets/hilde-256.png', width: 40, height: 40, alt: '' }), h('h1', null, 'HILDE einrichten')), progress, body);
+    panel.append(h('div', { class: 'wizard-head' }, h('img', { src: 'assets/hilde-avatar.png', width: 44, height: 44, alt: '' }), h('h1', null, 'HILDE einrichten')), progress, body);
     try {
       if (step === 1) await stepWelcome(body);
       else if (step === 2) await stepTier(body);
@@ -53,8 +53,11 @@ function show(startStep: number, onDone: () => void): void {
     const gb = (b: number) => (b / 1024 ** 3).toLocaleString('de-DE', { maximumFractionDigits: 1 }) + ' GB';
     const ok = (good: boolean, text: string) => h('li', { class: good ? 'ok' : 'warn' }, (good ? '✓ ' : '! ') + text);
     body.append(
-      h('h2', null, 'Taste drücken. Sprechen. Loslassen.'),
-      h('p', null, 'HILDE wandelt Sprache vollständig auf diesem PC in Text um – ohne Cloud, ohne Konto, ohne Telemetrie. Für die Einrichtung werden einmalig die Sprachmodelle geladen; danach arbeitet HILDE offline.'),
+      h('div', { class: 'wizard-hero' },
+        h('div', null,
+          h('h2', null, 'Hallo, ich bin HILDE.'),
+          h('p', null, 'Taste drücken. Sprechen. Loslassen. Ich wandle Sprache vollständig auf diesem PC in Text um – ohne Cloud, ohne Konto, ohne Telemetrie. Für die Einrichtung lade ich einmalig meine Sprachmodelle; danach arbeite ich offline.')),
+        h('img', { src: 'assets/hilde-mascot.png', alt: '' })),
       h('ul', { class: 'checks' },
         ok(sys.isWindows11OrLater, sys.isWindows11OrLater ? 'Windows 11' : 'Windows 11 empfohlen – ' + sys.osDescription),
         ok(sys.is64Bit, '64-Bit-System'),

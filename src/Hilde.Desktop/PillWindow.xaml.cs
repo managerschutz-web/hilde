@@ -23,7 +23,8 @@ public partial class PillWindow : Window
     [DllImport("user32.dll")] private static extern int SetWindowLong(IntPtr hWnd, int nIndex, int dwNewLong);
 
     private static readonly Brush Neutral = Freeze(Color.FromRgb(0x9C, 0xA3, 0xAF));
-    private static readonly Brush Green = Freeze(Color.FromRgb(0x34, 0xD3, 0x99));
+    private Brush Green = Freeze(Color.FromRgb(0x34, 0xD3, 0x99));
+    private Color _accent = Color.FromRgb(0x34, 0xD3, 0x99);
     private static readonly Brush Yellow = Freeze(Color.FromRgb(0xFB, 0xBF, 0x24));
     private static readonly Brush Blue = Freeze(Color.FromRgb(0x60, 0xA5, 0xFA));
     private static readonly Brush Red = Freeze(Color.FromRgb(0xF8, 0x71, 0x71));
@@ -50,13 +51,76 @@ public partial class PillWindow : Window
         _provisionalTimer.Tick += (_, _) => { _provisionalTimer.Stop(); if (_pending != null) Apply(_pending); };
         _savePosTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(600) };
         _savePosTimer.Tick += (_, _) => { _savePosTimer.Stop(); PositionChanged?.Invoke(Left, Top); };
-        LocationChanged += (_, _) => { _savePosTimer.Stop(); _savePosTimer.Start(); };
+        LocationChanged += (_, _) => { if (_autoMove) return; _savePosTimer.Stop(); _savePosTimer.Start(); };
+        SizeChanged += OnSizeChanged;
         SourceInitialized += (_, _) =>
         {
             var hwnd = new WindowInteropHelper(this).Handle;
             SetWindowLong(hwnd, GWL_EXSTYLE, GetWindowLong(hwnd, GWL_EXSTYLE) | WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW);
         };
         Apply(new StatusEventArgs(HildeState.Ready));
+    }
+
+    private bool _autoMove;
+    private bool _anchorBottom = true;
+
+    /// <summary>Wächst die Pill durch die Vorschau, bleibt die Unterkante stehen (Pill sitzt meist unten).</summary>
+    private void OnSizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        if (!e.HeightChanged || e.PreviousSize.Height <= 0) return;
+        if (e.NewSize.Height > e.PreviousSize.Height)
+            _anchorBottom = Top + e.PreviousSize.Height > SystemParameters.WorkArea.Top + 220;
+        if (!_anchorBottom) return;
+        _autoMove = true;
+        Top -= e.NewSize.Height - e.PreviousSize.Height;
+        Dispatcher.InvokeAsync(() => _autoMove = false, DispatcherPriority.Background);
+    }
+
+    /// <summary>Frei wählbare Farben (#RRGGBB).</summary>
+    public void ApplyColors(string? background, string? accent)
+    {
+        var bg = ParseColor(background, Color.FromRgb(0x16, 0x1A, 0x22));
+        _accent = ParseColor(accent, Color.FromRgb(0x34, 0xD3, 0x99));
+        Root.Background = new SolidColorBrush(Color.FromArgb(0xD9, bg.R, bg.G, bg.B));
+        Green = Freeze(_accent);
+        // Text hell oder dunkel je nach Hintergrund
+        double lum = 0.2126 * bg.R + 0.7152 * bg.G + 0.0722 * bg.B;
+        var fg = lum > 150 ? Color.FromRgb(0x1B, 0x1F, 0x27) : Color.FromRgb(0xF0, 0xF4, 0xFA);
+        StatusText.Foreground = new SolidColorBrush(fg);
+        PreviewText.Foreground = new SolidColorBrush(fg);
+        MicIcon.Fill = new SolidColorBrush(fg);
+        Apply(new StatusEventArgs(_state));
+    }
+
+    private static Color ParseColor(string? hex, Color fallback)
+    {
+        try { return hex is { Length: 7 } && hex[0] == '#' ? (Color)ColorConverter.ConvertFromString(hex) : fallback; }
+        catch { return fallback; }
+    }
+
+    /// <summary>Live-Text anzeigen (leer = ausblenden). Zeigt nur das Ende langer Diktate.</summary>
+    public void SetPreview(string fixedText, string provisional)
+    {
+        if (string.IsNullOrWhiteSpace(fixedText) && string.IsNullOrWhiteSpace(provisional))
+        {
+            PreviewText.Visibility = Visibility.Collapsed;
+            PreviewText.Inlines.Clear();
+            return;
+        }
+        const int max = 260;
+        string f = fixedText.Trim(), p = provisional.Trim();
+        int total = f.Length + p.Length + 1;
+        if (total > max)
+        {
+            int cut = total - max;
+            if (cut < f.Length) f = "… " + f[cut..].TrimStart();
+            else { p = "… " + p[Math.Min(p.Length, cut - f.Length)..]; f = ""; }
+        }
+        PreviewText.Inlines.Clear();
+        if (f.Length > 0) PreviewText.Inlines.Add(new System.Windows.Documents.Run(f + " "));
+        if (p.Length > 0)
+            PreviewText.Inlines.Add(new System.Windows.Documents.Run(p) { FontStyle = FontStyles.Italic, Foreground = new SolidColorBrush(Color.FromArgb(0xB0, 0xC7, 0xCD, 0xD6)) });
+        PreviewText.Visibility = Visibility.Visible;
     }
 
     private static Brush Freeze(Color c) { var b = new SolidColorBrush(c); b.Freeze(); return b; }
@@ -107,7 +171,7 @@ public partial class PillWindow : Window
         StatusText.Text = text;
         ToolTip = e.ErrorId != null ? $"{text} ({e.ErrorId})" : "HILDE – Strg rechts halten und sprechen";
         MicButton.Background = e.State == HildeState.Recording
-            ? new SolidColorBrush(Color.FromArgb(0x55, 0x34, 0xD3, 0x99))
+            ? new SolidColorBrush(Color.FromArgb(0x55, _accent.R, _accent.G, _accent.B))
             : new SolidColorBrush(Color.FromArgb(0x26, 0xFF, 0xFF, 0xFF));
         bool processing = e.State == HildeState.Processing;
         Spinner.Visibility = processing ? Visibility.Visible : Visibility.Collapsed;

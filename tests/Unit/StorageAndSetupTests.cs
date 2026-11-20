@@ -150,6 +150,7 @@ public class ModelManagerTests
         paths.EnsureCreated();
         var (manifest, data) = Manifest(correctHash: true);
         // halben Download vorbereiten
+        Directory.CreateDirectory(paths.VadModels);
         File.WriteAllBytes(Path.Combine(paths.VadModels, "vad.onnx.part"), data[..150_000]);
         var handler = new FakeHandler(data);
         var mm = new ModelManager(paths, manifest, Log.Logger, handler);

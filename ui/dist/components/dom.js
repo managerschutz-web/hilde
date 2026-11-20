@@ -9,6 +9,9 @@ export function h(tag, props, ...children) {
                 el.className = String(v);
             else if (k === 'dataset')
                 Object.assign(el.dataset, v);
+            // CSSOM statt style-Attribut: erlaubt unter der strengen Content-Security-Policy
+            else if (k === 'style')
+                el.style.cssText = String(v);
             else if (k.startsWith('on') && typeof v === 'function')
                 el.addEventListener(k.slice(2).toLowerCase(), v);
             else if (k === 'value' && 'value' in el)

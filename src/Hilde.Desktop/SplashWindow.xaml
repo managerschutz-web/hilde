@@ -1,0 +1,29 @@
+<Window x:Class="Hilde.Desktop.SplashWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="HILDE" Width="820" Height="500" WindowStyle="None" AllowsTransparency="True"
+        Background="Transparent" ResizeMode="NoResize" ShowInTaskbar="False" Topmost="True"
+        WindowStartupLocation="CenterScreen" FontFamily="{StaticResource UiFont}">
+    <Grid>
+        <Image Source="pack://application:,,,/Assets/splash.png" Stretch="Uniform"
+               RenderOptions.BitmapScalingMode="HighQuality"/>
+        <!-- Version + Startfortschritt unten links -->
+        <StackPanel HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="52,0,0,26">
+            <Border Width="230" Height="3" CornerRadius="1.5" Background="#22FFFFFF" ClipToBounds="True"
+                    HorizontalAlignment="Left">
+                <Border x:Name="Bar" Width="70" Height="3" CornerRadius="1.5" HorizontalAlignment="Left">
+                    <Border.Background>
+                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                            <GradientStop Color="#2E6BFF" Offset="0"/>
+                            <GradientStop Color="#7EF0B4" Offset="1"/>
+                        </LinearGradientBrush>
+                    </Border.Background>
+                    <Border.RenderTransform>
+                        <TranslateTransform x:Name="BarMove"/>
+                    </Border.RenderTransform>
+                </Border>
+            </Border>
+            <TextBlock x:Name="Info" Margin="0,8,0,0" FontSize="12" Foreground="#8597AD" Text="Startet …"/>
+        </StackPanel>
+    </Grid>
+</Window>

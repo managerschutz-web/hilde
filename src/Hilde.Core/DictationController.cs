@@ -24,7 +24,8 @@ public sealed class DictationController : IAsyncDisposable
         public RecordingMode Mode { get; set; }
     }
 
-    private sealed record ProcessJob(RecordingContext Context, CapturedAudio Audio, bool Insert, string? Notice);
+    private sealed record ProcessJob(RecordingContext Context, CapturedAudio Audio, bool Insert, string? Notice,
+        LivePreviewSession? Preview = null);
 
     private readonly IAudioCaptureService _audio;
     private readonly IVoiceActivityDetector _vad;
@@ -45,6 +46,7 @@ public sealed class DictationController : IAsyncDisposable
     private readonly Task _actionLoop;
     private readonly Task _jobLoop;
     private RecordingContext? _current;
+    private LivePreviewSession? _preview;
     private int _pendingJobs;
     private CancellationTokenSource? _doneResetCts;
 
@@ -54,6 +56,8 @@ public sealed class DictationController : IAsyncDisposable
     public event EventHandler<float>? LevelChanged;
     public event EventHandler<CopyFallbackEventArgs>? CopyFallbackRequested;
     public event EventHandler<TranscriptRecord>? Completed;
+    /// <summary>Live-Text: (bereits fest erkannt, vorläufig). Leer = Vorschau ausblenden.</summary>
+    public event Action<string, string>? PreviewChanged;
 
     public HildeState State { get; private set; } = HildeState.Ready;
 
@@ -147,6 +151,13 @@ public sealed class DictationController : IAsyncDisposable
         var raw = Path.Combine(dir, "capture.wav");
         _audio.Start(_settings.Current.MicrophoneId, raw);
         _current = new RecordingContext { Id = id, Target = target, RawWavPath = raw, Mode = mode };
+        if (_settings.Current.LivePreview)
+        {
+            var session = new LivePreviewSession(_audio, _speech, _settings.Current.Language, _dictionary.InitialPrompt,
+                dir, _log, (fixedText, provisional) => PreviewChanged?.Invoke(fixedText, provisional));
+            _preview = session;
+            session.Start();
+        }
         _deviceLostFlag = false;
         _doneResetCts?.Cancel();
         SetState(HildeState.Recording,
@@ -158,6 +169,9 @@ public sealed class DictationController : IAsyncDisposable
         var ctx = _current;
         if (ctx == null) return;
         _current = null;
+        _preview?.Abandon();
+        _preview = null;
+        PreviewChanged?.Invoke("", "");
         try { _audio.Cancel(); } catch (Exception ex) { _log.Debug(ex, "Cancel"); }
         TryDeleteDir(_paths.RecordingDir(ctx.Id));
         if (silent) SetIdleOrProcessing();
@@ -170,6 +184,8 @@ public sealed class DictationController : IAsyncDisposable
         var ctx = _current;
         if (ctx == null) { ResetGestures(); return; }
         _current = null;
+        var preview = _preview;
+        _preview = null;
         var notice = _deviceLostFlag ? HildeErrors.MicrophoneLost.Message : null;
         CapturedAudio audio;
         try
@@ -185,7 +201,7 @@ public sealed class DictationController : IAsyncDisposable
         ResetGestures();
         Interlocked.Increment(ref _pendingJobs);
         SetState(HildeState.Processing, "Verarbeite …");
-        _jobs.Writer.TryWrite(new ProcessJob(ctx, audio, Insert: true, notice));
+        _jobs.Writer.TryWrite(new ProcessJob(ctx, audio, Insert: true, notice, preview));
     }
 
     private void ResetGestures() { lock (Gestures) Gestures.Reset(); }
@@ -246,17 +262,45 @@ public sealed class DictationController : IAsyncDisposable
             return;
         }
 
-        // 1) Spracherkennung (isolierter Prozess, mit Timeout)
+        // 1) Spracherkennung (isolierter Prozess, mit Timeout) – Vorarbeit der Live-Vorschau übernehmen
         SpeechResult speech;
-        var timeout = TimeSpan.FromSeconds(60) + job.Audio.Duration * 3;
+        string? prefix = null;
+        string asrPath = job.Audio.WavPath;
+        var asrDuration = job.Audio.Duration;
+        if (job.Preview != null)
+        {
+            await job.Preview.StopAsync().ConfigureAwait(false);
+            if (!job.Preview.Failed && job.Preview.CommittedSamples > 0 && job.Preview.CommittedSamples < samples.Length)
+            {
+                prefix = job.Preview.CommittedText;
+                var rest = samples[job.Preview.CommittedSamples..];
+                asrPath = Path.Combine(_paths.RecordingDir(ctx.Id), "rest.wav");
+                WavIO.WriteMono16k(asrPath, rest);
+                asrDuration = TimeSpan.FromSeconds(rest.Length / (double)WavIO.SampleRate);
+                _log.Information("Vorarbeit genutzt: {Done:F1}s bereits erkannt, Rest {Rest:F1}s",
+                    job.Preview.CommittedSamples / (double)WavIO.SampleRate, asrDuration.TotalSeconds);
+            }
+        }
+        var timeout = TimeSpan.FromSeconds(60) + asrDuration * 3;
         using (var tcs = CancellationTokenSource.CreateLinkedTokenSource(_cts.Token))
         {
             tcs.CancelAfter(timeout);
             try
             {
-                speech = await _speech.TranscribeAsync(
-                    new SpeechRequest(job.Audio.WavPath, s.Language, _dictionary.InitialPrompt), tcs.Token)
-                    .ConfigureAwait(false);
+                if (prefix != null && !LivePreviewSession.HasEnergy(WavIO.ReadMono16k(asrPath)))
+                {
+                    speech = new SpeechResult("", s.Language is "de" or "en" ? s.Language : "de", []);
+                }
+                else
+                {
+                    speech = await _speech.TranscribeAsync(
+                        new SpeechRequest(asrPath, s.Language,
+                            prefix == null ? _dictionary.InitialPrompt : LivePreviewSession.BuildPrompt(_dictionary.InitialPrompt, prefix),
+                            Fast: s.FastShortDictation), tcs.Token)
+                        .ConfigureAwait(false);
+                }
+                if (prefix != null)
+                    speech = speech with { Text = (prefix + " " + HallucinationFilter.Clean(speech.Text)).Trim() };
             }
             catch (Exception ex)
             {
@@ -266,6 +310,7 @@ public sealed class DictationController : IAsyncDisposable
                 record.Status = TranscriptStatus.Failed;
                 record.ErrorId = err.Id;
                 await SafeSaveAsync(record).ConfigureAwait(false);
+                PreviewChanged?.Invoke("", "");
                 SetState(HildeState.Error, err.Message, err.Id);
                 ScheduleReady(TimeSpan.FromSeconds(6));
                 return;
@@ -349,6 +394,7 @@ public sealed class DictationController : IAsyncDisposable
             ctx.Id, job.Audio.Duration.TotalSeconds, tAsr.TotalSeconds, (tText - tAsr).TotalSeconds,
             sw.Elapsed.TotalSeconds, s.TextMode, record.InsertionMethod, record.FallbackReason ?? "-");
 
+        PreviewChanged?.Invoke("", "");
         Completed?.Invoke(this, record);
         SetState(HildeState.Done, job.Notice ?? doneMessage);
         ScheduleReady();
@@ -415,6 +461,7 @@ public sealed class DictationController : IAsyncDisposable
 
     private async Task DropAsync(TranscriptRecord record, HildeErrors.Entry reason)
     {
+        PreviewChanged?.Invoke("", "");
         try { await _repo.DeleteAsync(record.Id).ConfigureAwait(false); } catch (Exception ex) { _log.Debug(ex, "Drop"); }
         TryDeleteDir(_paths.RecordingDir(record.Id));
         SetState(HildeState.Done, reason.Message, reason.Id);

@@ -21,6 +21,10 @@ public interface IAudioCaptureService : IDisposable
     void StopMonitor();
     /// <summary>Wandelt eine Rohaufnahme (beliebiges Format) in 16-kHz-Mono-PCM um (auch nach Absturz).</summary>
     CapturedAudio NormalizeFile(string rawWavPath, string outWavPath);
+    /// <summary>Anzahl bisher aufgenommener Samples als 16 kHz Mono (Live-Vorschau).</summary>
+    int LiveSampleCount { get; }
+    /// <summary>Kopie eines Ausschnitts der laufenden Aufnahme (16 kHz Mono).</summary>
+    float[] CopyLiveSamples(int start, int count);
 }
 
 public interface IVoiceActivityDetector

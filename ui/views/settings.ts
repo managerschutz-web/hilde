@@ -1,5 +1,5 @@
 import { call, on } from '../bridge.js';
-import { h, clear, toast, errorText, debounce, fmtBytes } from '../components/dom.js';
+import { h, clear, toast, errorText, debounce, fmtBytes, confirmDialog } from '../components/dom.js';
 import { openSetup } from './setup.js';
 
 export function applyTheme(theme: string): void {
@@ -39,10 +39,12 @@ export function renderSettings(root: HTMLElement): () => void {
   async function draw(): Promise<void> {
     try {
       s = await call('settings.get');
-      const [devices, info, models] = await Promise.all([
+      const [devices, info, models, loc, uninst] = await Promise.all([
         call<any[]>('devices.list').catch(() => []),
         call<any>('app.info'),
         call<any>('models.status', { tier: s.performanceTier }),
+        call<any>('models.location'),
+        call<any>('app.uninstallInfo').catch(() => ({ available: false })),
       ]);
       clear(root);
 
@@ -83,7 +85,11 @@ export function renderSettings(root: HTMLElement): () => void {
             h('div', { class: 'field inline' }, h('span', null, 'Diktiertaste'), hotkeyBtn),
             number('Mindestens halten', s.hotkey.minHoldMs, 100, 800, 25, 'ms', v => s.hotkey.minHoldMs = v),
             number('Doppeltipp-Fenster', s.hotkey.doubleTapMs, 200, 800, 25, 'ms', v => s.hotkey.doubleTapMs = v),
-            toggle('Esc verwirft die laufende Aufnahme', s.hotkey.escapeCancels, v => s.hotkey.escapeCancels = v)),
+            toggle('Esc verwirft die laufende Aufnahme', s.hotkey.escapeCancels, v => s.hotkey.escapeCancels = v),
+            toggle('Live-Text während des Sprechens', s.livePreview, v => s.livePreview = v,
+              'Zeigt den erkannten Text in der Pill und rechnet schon vor – lange Diktate sind danach schneller fertig.'),
+            toggle('Schnellmodus für kurze Diktate', s.fastShortDictation, v => s.fastShortDictation = v,
+              'Kurze Aufnahmen werden mit kleinerem Rechenfenster erkannt. Bei Erkennungsproblemen testweise ausschalten.')),
           section('Mikrofon',
             select('Gerät', s.microphoneId ?? '', devOptions, v => s.microphoneId = v || null),
             h('div', { class: 'row' }, monBtn, meter)),
@@ -99,7 +105,15 @@ export function renderSettings(root: HTMLElement): () => void {
           section('Pill',
             toggle('Pill anzeigen', s.pill.visible, v => s.pill.visible = v),
             toggle('Immer im Vordergrund', s.pill.topmost, v => s.pill.topmost = v),
-            number('Deckkraft', Math.round(s.pill.opacity * 100), 40, 100, 5, '%', v => s.pill.opacity = v / 100)),
+            number('Deckkraft', Math.round(s.pill.opacity * 100), 40, 100, 5, '%', v => s.pill.opacity = v / 100),
+            colorRow('Hintergrund', s.pill.backgroundColor, v => s.pill.backgroundColor = v),
+            colorRow('Akzent (Aufnahme, Pegel)', s.pill.accentColor, v => s.pill.accentColor = v),
+            h('div', { class: 'row' },
+              ...[['#161A22', '#34D399', 'Nacht'], ['#F4F5F7', '#0F9F75', 'Hell'], ['#0B1E3A', '#7EF0B4', 'dieapp'], ['#2A1630', '#F472B6', 'Beere'], ['#1F2937', '#F59E0B', 'Bernstein']]
+                .map(([bg, ac, name]) => h('button', {
+                  class: 'swatch', title: name, 'aria-label': `Farbschema ${name}`, style: `--bg:${bg};--ac:${ac}`,
+                  onclick: () => { s.pill.backgroundColor = bg; s.pill.accentColor = ac; persist(); draw(); }
+                }, h('span', null), name)))),
           section('Archiv',
             toggle('Diktate im Archiv speichern', s.archive.enabled, v => s.archive.enabled = v),
             toggle('Audio behalten', s.archive.keepAudio, v => s.archive.keepAudio = v, 'Standard: Audio wird nach erfolgreicher Verarbeitung gelöscht.')),
@@ -108,7 +122,13 @@ export function renderSettings(root: HTMLElement): () => void {
             toggle('Grafikkarte nutzen (Vulkan)', s.useGpu, v => s.useGpu = v, 'Bei Problemen schaltet HILDE automatisch auf die CPU um.'),
             number('Modelle entladen nach', s.modelIdleUnloadMinutes, 1, 240, 1, 'min Inaktivität', v => s.modelIdleUnloadMinutes = v),
             h('div', { class: 'row' }, h('span', { class: 'muted' }, `${installed} von ${models.models.length} Modellen installiert · noch ${fmtBytes(models.requiredBytes)} · frei ${fmtBytes(models.freeBytes)}`),
-              h('button', { class: 'btn', onclick: () => openSetup(3) }, 'Modelle verwalten'))),
+              h('button', { class: 'btn', onclick: () => openSetup(3) }, 'Modelle verwalten')),
+            h('div', { class: 'field' }, h('span', null, 'Speicherort der Modelle'),
+              h('code', { class: 'path' }, loc.path),
+              loc.oneDrive ? h('small', { class: 'warn' }, 'Achtung: Dieser Ordner liegt in OneDrive und wird in die Cloud synchronisiert.') : null,
+              h('div', { class: 'row tight' },
+                h('button', { class: 'btn', onclick: moveModels }, 'Ändern …'),
+                loc.isDefault ? null : h('button', { class: 'btn', onclick: () => doMove({ reset: true }) }, 'Standard wiederherstellen')))),
           section('Allgemein',
             toggle('Mit Windows starten', s.autostart, v => s.autostart = v),
             select('Darstellung', s.theme, [['system', 'Wie Windows'], ['light', 'Hell'], ['dark', 'Dunkel']], v => s.theme = v),
@@ -121,8 +141,50 @@ export function renderSettings(root: HTMLElement): () => void {
             h('p', { class: 'muted small' }, 'Keine Cloud, keine Telemetrie, keine Anmeldung. Protokolle enthalten nie Diktatinhalte.'),
             h('div', { class: 'row' },
               h('button', { class: 'btn', onclick: showHealth }, 'Komponenten prüfen'),
-              h('button', { class: 'btn', onclick: showLicenses }, 'Lizenzen anzeigen')))));
+              h('button', { class: 'btn', onclick: showLicenses }, 'Lizenzen anzeigen'),
+              uninst.available ? h('button', { class: 'btn danger-ghost', onclick: uninstall }, 'HILDE deinstallieren …') : null))));
     } catch (e) { toast(errorText(e), 'error'); }
+  }
+
+  function colorRow(label: string, value: string, set: (v: string) => void) {
+    const inp = h('input', { type: 'color', class: 'color', value, onchange: (e: Event) => { set((e.target as HTMLInputElement).value.toUpperCase()); persist(); } });
+    return h('label', { class: 'field inline' }, h('span', null, label), inp);
+  }
+
+  async function moveModels(): Promise<void> {
+    const r = await call<any>('models.chooseFolder');
+    if (r.cancelled) return;
+    if (r.oneDrive && !await confirmDialog('OneDrive-Ordner gewählt',
+      'Dieser Ordner wird mit OneDrive synchronisiert. Die Modelle (mehrere GB) würden in die Cloud hochgeladen und könnten ausgelagert werden. Trotzdem verwenden?', 'Trotzdem verwenden', true)) return;
+    if (!await confirmDialog('Modelle verschieben?', `Neuer Speicherort: ${r.path}\nFrei: ${fmtBytes(r.freeBytes)}. HILDE verschiebt die Dateien und prüft sie anschließend.`, 'Verschieben')) return;
+    doMove({ path: r.path });
+  }
+
+  async function doMove(params: any): Promise<void> {
+    toast('Modelle werden verschoben …', 'info', 6000);
+    try {
+      const r = await call<any>('models.move', params, 60 * 60000);
+      toast(`${r.moved} Modell(e) verschoben nach ${r.path}`, 'ok', 6000);
+      draw();
+    } catch (e) { toast(errorText(e), 'error', 8000); }
+  }
+
+  function uninstall(): void {
+    const overlay = document.getElementById('overlay')!;
+    const del = h('input', { type: 'checkbox' });
+    const close = () => { dlg.remove(); overlay.classList.remove('show'); };
+    const dlg = h('div', { class: 'dialog', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'HILDE deinstallieren' },
+      h('h2', null, 'HILDE deinstallieren?'),
+      h('p', null, 'HILDE wird beendet und der Windows-Deinstaller gestartet.'),
+      h('label', { class: 'check' }, del, 'Auch meine Daten löschen (Archiv, Wörterbuch, Einstellungen, Modelle im Standardordner)'),
+      h('div', { class: 'row end' },
+        h('button', { class: 'btn', onclick: close }, 'Abbrechen'),
+        h('button', { class: 'btn danger', onclick: async () => {
+          try { await call('app.uninstall', { deleteData: del.checked }); } catch (e) { toast(errorText(e), 'error'); close(); }
+        } }, 'Deinstallieren')));
+    dlg.addEventListener('keydown', e => { if (e.key === 'Escape') close(); });
+    overlay.append(dlg);
+    overlay.classList.add('show');
   }
 
   function section(title: string, ...children: (Node | null)[]) {

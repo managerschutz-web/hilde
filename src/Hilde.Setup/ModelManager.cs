@@ -267,6 +267,39 @@ public sealed class ModelManager : IModelManager
         return string.Equals(hash, expected, StringComparison.OrdinalIgnoreCase);
     }
 
+    /// <summary>Verschiebt alle installierten Modelle in einen neuen Ordner (Engines müssen beendet sein).</summary>
+    public async Task<int> MoveAllAsync(string newRoot, CancellationToken ct)
+    {
+        int moved = 0;
+        foreach (var inst in _installed.Models.Values.ToList())
+        {
+            var entry = _manifest.Models.FirstOrDefault(m => m.Id == inst.Id);
+            if (entry == null || !File.Exists(inst.Path)) continue;
+            var dir = Path.Combine(newRoot, entry.Kind.ToString().ToLowerInvariant());
+            Directory.CreateDirectory(dir);
+            var target = Path.Combine(dir, entry.FileName);
+            if (string.Equals(Path.GetFullPath(target), Path.GetFullPath(inst.Path), StringComparison.OrdinalIgnoreCase)) continue;
+            Report(entry, 0, inst.SizeBytes, "copy", message: "Verschiebe …");
+            // Kopieren + prüfen + alte Datei löschen (funktioniert auch über Laufwerksgrenzen)
+            await using (var s = File.OpenRead(inst.Path))
+            await using (var d = File.Create(target + ".part"))
+                await s.CopyToAsync(d, ct).ConfigureAwait(false);
+            File.Move(target + ".part", target, overwrite: true);
+            if (!string.Equals(await HashFileAsync(target, ct).ConfigureAwait(false), inst.Sha256, StringComparison.OrdinalIgnoreCase))
+            {
+                File.Delete(target);
+                throw new HildeException(HildeErrors.ModelChecksum);
+            }
+            var old = inst.Path;
+            lock (_stateLock) inst.Path = target;
+            SaveState();
+            try { File.Delete(old); } catch (Exception ex) { _log.Warning(ex, "Alte Modelldatei nicht gelöscht"); }
+            Report(entry, inst.SizeBytes, inst.SizeBytes, "done");
+            moved++;
+        }
+        return moved;
+    }
+
     /// <summary>Entfernt ein Modell (nur auf ausdrücklichen Wunsch).</summary>
     public void Remove(string modelId)
     {

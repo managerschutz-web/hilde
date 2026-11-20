@@ -33,7 +33,7 @@ public sealed record EngineResponse(long Id, bool Ok, JsonElement? Result, strin
 
 public sealed record HelloResult(int ProtocolVersion, string Kind, string EngineVersion, int ProcessId);
 
-public sealed record TranscribeParams(string WavPath, string Language, string? Prompt);
+public sealed record TranscribeParams(string WavPath, string Language, string? Prompt, bool Fast = false);
 
 public sealed record GenerateParams(string Prompt, int MaxTokens, IReadOnlyList<string> Stop, float Temperature);
 

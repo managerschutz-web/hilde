@@ -29,15 +29,23 @@ public partial class App : Application
         AppDomain.CurrentDomain.UnhandledException += (_, a) => Log.Fatal(a.ExceptionObject as Exception, "Unbehandelter Fehler");
         TaskScheduler.UnobservedTaskException += (_, a) => { Log.Error(a.Exception, "Unbeobachtete Task-Ausnahme"); a.SetObserved(); };
 
+        bool tray = e.Args.Contains("--tray");
+        SplashWindow? splash = null;
+        if (!tray)
+        {
+            splash = new SplashWindow();
+            splash.Show();
+        }
         try
         {
             _host = new AppHost(paths, Dispatcher);
-            await _host.StartAsync(startInTray: e.Args.Contains("--tray"));
+            await _host.StartAsync(startInTray: tray, beforeShow: splash == null ? null : () => splash.CloseGentlyAsync(TimeSpan.FromSeconds(1.8)));
             _single.ActivationRequested += () => Dispatcher.InvokeAsync(() => _host?.ShowMainWindow());
             _single.Listen();
         }
         catch (Exception ex)
         {
+            splash?.Close();
             Log.Fatal(ex, "Start fehlgeschlagen");
             MessageBox.Show("HILDE konnte nicht gestartet werden.\n\n" + ex.Message +
                             "\n\nDetails stehen im Protokoll unter " + paths.Logs,

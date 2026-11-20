@@ -66,6 +66,10 @@ public sealed class WhisperEngineHandler : IEngineHandler
             .WithTemperature(0f);
         builder = p.Language is "de" or "en" ? builder.WithLanguage(p.Language) : builder.WithLanguageDetection();
         if (!string.IsNullOrWhiteSpace(p.Prompt)) builder = builder.WithPrompt(p.Prompt);
+        // Whisper rechnet sonst immer mit einem 30-s-Fenster. Für kurze Aufnahmen den Kontext verkleinern.
+        double seconds = Math.Max(0, (new FileInfo(p.WavPath).Length - 44) / 32000.0);
+        int ctx = AudioContextFor(seconds, p.Fast);
+        if (ctx < 1500) builder = builder.WithAudioContextSize(ctx);
 
         var sw = System.Diagnostics.Stopwatch.StartNew();
         await using var processor = builder.Build();
@@ -82,8 +86,16 @@ public sealed class WhisperEngineHandler : IEngineHandler
             text.Append(t);
             if (!string.IsNullOrEmpty(seg.Language)) detected = seg.Language;
         }
-        _log.Information("Whisper: {Sec:F2}s für {Segments} Segmente", sw.Elapsed.TotalSeconds, segments.Count);
+        _log.Information("Whisper: {Sec:F2}s für {Audio:F1}s Audio (Kontext {Ctx}, {Segments} Segmente)", sw.Elapsed.TotalSeconds, seconds, ctx, segments.Count);
         return new SpeechResult(text.ToString().Trim(), detected, segments);
+    }
+
+    /// <summary>1500 = volle 30 s. Mit Sicherheitsaufschlag, nie unter ~9 s (448).</summary>
+    public static int AudioContextFor(double seconds, bool fast)
+    {
+        if (!fast || seconds >= 25) return 1500;
+        int ctx = (int)Math.Ceiling((seconds + 2.0) / 30.0 * 1500 / 64.0) * 64;
+        return Math.Clamp(ctx, 448, 1500);
     }
 
     public void Dispose()

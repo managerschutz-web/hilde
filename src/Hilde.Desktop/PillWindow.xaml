@@ -19,6 +19,10 @@
         <Border.Effect>
             <DropShadowEffect BlurRadius="18" ShadowDepth="3" Opacity="0.35" Color="Black"/>
         </Border.Effect>
+        <StackPanel Orientation="Vertical">
+        <!-- Live-Vorschau: fester Text hell, vorläufiger Rest grau/kursiv -->
+        <TextBlock x:Name="PreviewText" Visibility="Collapsed" TextWrapping="Wrap" Width="440"
+                   Margin="10,6,10,6" FontSize="13.5" LineHeight="19" Foreground="#F0F4FA"/>
         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
             <!-- Mikrofon: Klick startet/beendet die Freihandaufnahme -->
             <Border x:Name="MicButton" Width="32" Height="32" CornerRadius="16" Background="#26FFFFFF"
@@ -56,6 +60,7 @@
                       Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center"
                       StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
             </Border>
+        </StackPanel>
         </StackPanel>
     </Border>
 </Window>

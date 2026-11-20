@@ -24,7 +24,7 @@ function show(startStep, onDone) {
         clear(panel);
         const progress = h('ol', { class: 'steps' }, steps.map((t, i) => h('li', { class: i + 1 === step ? 'current' : i + 1 < step ? 'done' : '' }, t)));
         const body = h('div', { class: 'wizard-body' });
-        panel.append(h('div', { class: 'wizard-head' }, h('img', { src: 'assets/hilde-256.png', width: 40, height: 40, alt: '' }), h('h1', null, 'HILDE einrichten')), progress, body);
+        panel.append(h('div', { class: 'wizard-head' }, h('img', { src: 'assets/hilde-avatar.png', width: 44, height: 44, alt: '' }), h('h1', null, 'HILDE einrichten')), progress, body);
         try {
             if (step === 1)
                 await stepWelcome(body);
@@ -48,7 +48,7 @@ function show(startStep, onDone) {
         tier = sys.recommendedTier.toLowerCase() === 'light' ? 'Light' : 'Standard';
         const gb = (b) => (b / 1024 ** 3).toLocaleString('de-DE', { maximumFractionDigits: 1 }) + ' GB';
         const ok = (good, text) => h('li', { class: good ? 'ok' : 'warn' }, (good ? '✓ ' : '! ') + text);
-        body.append(h('h2', null, 'Taste drücken. Sprechen. Loslassen.'), h('p', null, 'HILDE wandelt Sprache vollständig auf diesem PC in Text um – ohne Cloud, ohne Konto, ohne Telemetrie. Für die Einrichtung werden einmalig die Sprachmodelle geladen; danach arbeitet HILDE offline.'), h('ul', { class: 'checks' }, ok(sys.isWindows11OrLater, sys.isWindows11OrLater ? 'Windows 11' : 'Windows 11 empfohlen – ' + sys.osDescription), ok(sys.is64Bit, '64-Bit-System'), ok(sys.totalMemoryBytes >= 7.5 * 1024 ** 3, `Arbeitsspeicher ${gb(sys.totalMemoryBytes)}`), ok((sys.freeDiskBytes ?? 0) >= 5 * 1024 ** 3, `Freier Speicher ${sys.freeDiskBytes != null ? gb(sys.freeDiskBytes) : 'unbekannt'}`), h('li', null, `${sys.logicalCores} Prozessorkerne`)), nav(false, 'Weiter', () => { step = 2; render(); }));
+        body.append(h('div', { class: 'wizard-hero' }, h('div', null, h('h2', null, 'Hallo, ich bin HILDE.'), h('p', null, 'Taste drücken. Sprechen. Loslassen. Ich wandle Sprache vollständig auf diesem PC in Text um – ohne Cloud, ohne Konto, ohne Telemetrie. Für die Einrichtung lade ich einmalig meine Sprachmodelle; danach arbeite ich offline.')), h('img', { src: 'assets/hilde-mascot.png', alt: '' })), h('ul', { class: 'checks' }, ok(sys.isWindows11OrLater, sys.isWindows11OrLater ? 'Windows 11' : 'Windows 11 empfohlen – ' + sys.osDescription), ok(sys.is64Bit, '64-Bit-System'), ok(sys.totalMemoryBytes >= 7.5 * 1024 ** 3, `Arbeitsspeicher ${gb(sys.totalMemoryBytes)}`), ok((sys.freeDiskBytes ?? 0) >= 5 * 1024 ** 3, `Freier Speicher ${sys.freeDiskBytes != null ? gb(sys.freeDiskBytes) : 'unbekannt'}`), h('li', null, `${sys.logicalCores} Prozessorkerne`)), nav(false, 'Weiter', () => { step = 2; render(); }));
     }
     async function stepTier(body) {
         const sys = await call('setup.system');

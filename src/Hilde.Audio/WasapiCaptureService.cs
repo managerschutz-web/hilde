@@ -25,6 +25,12 @@ public sealed class WasapiCaptureService : IAudioCaptureService
     private DateTime _lastLevel = DateTime.MinValue;
     private long _flushCounter;
     private WasapiCapture? _monitor;
+    // Live-Puffer (16 kHz Mono) für die Vorschau
+    private readonly List<float> _live16k = new();
+    private readonly object _liveLock = new();
+    private BufferedWaveProvider? _liveIn;
+    private ISampleProvider? _liveOut;
+    private float[] _liveTmp = new float[8192];
 
     public event EventHandler<float>? LevelChanged;
     public event EventHandler<string>? CaptureFailed;
@@ -90,6 +96,16 @@ public sealed class WasapiCaptureService : IAudioCaptureService
             _rawPath = targetWavPath;
             _outPath = Path.Combine(Path.GetDirectoryName(targetWavPath)!, "mic16k.wav");
             _writer = new WaveFileWriter(targetWavPath, capture.WaveFormat);
+            lock (_liveLock)
+            {
+                _live16k.Clear();
+                _liveIn = new BufferedWaveProvider(WaveFormat.CreateIeeeFloatWaveFormat(capture.WaveFormat.SampleRate, 1))
+                {
+                    ReadFully = false, BufferDuration = TimeSpan.FromSeconds(20), DiscardOnBufferOverflow = true
+                };
+                ISampleProvider src = _liveIn.ToSampleProvider();
+                _liveOut = capture.WaveFormat.SampleRate == WavIO.SampleRate ? src : new WdlResamplingSampleProvider(src, WavIO.SampleRate);
+            }
             _cancelled = false;
             _peak = 0;
             _stopped = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -123,6 +139,52 @@ public sealed class WasapiCaptureService : IAudioCaptureService
             if (++_flushCounter % 20 == 0) w.Flush();
         }
         ReportLevel(e.Buffer, e.BytesRecorded, fmt);
+        AppendLive(e.Buffer, e.BytesRecorded, fmt);
+    }
+
+    private void AppendLive(byte[] buffer, int bytes, WaveFormat fmt)
+    {
+        try
+        {
+            lock (_liveLock)
+            {
+                if (_liveIn == null || _liveOut == null) return;
+                int ch = Math.Max(1, fmt.Channels);
+                bool isFloat = fmt.Encoding == WaveFormatEncoding.IeeeFloat || (fmt is WaveFormatExtensible && fmt.BitsPerSample == 32);
+                int bps = fmt.BitsPerSample / 8;
+                int frames = bytes / (bps * ch);
+                var mono = new byte[frames * 4];
+                for (int f = 0; f < frames; f++)
+                {
+                    float sum = 0;
+                    for (int c = 0; c < ch; c++)
+                    {
+                        int o = (f * ch + c) * bps;
+                        sum += isFloat ? BitConverter.ToSingle(buffer, o) : BitConverter.ToInt16(buffer, o) / 32768f;
+                    }
+                    BitConverter.TryWriteBytes(mono.AsSpan(f * 4), sum / ch);
+                }
+                _liveIn.AddSamples(mono, 0, mono.Length);
+                int read;
+                while ((read = _liveOut.Read(_liveTmp, 0, _liveTmp.Length)) > 0)
+                    for (int i = 0; i < read; i++) _live16k.Add(_liveTmp[i]);
+            }
+        }
+        catch (Exception ex) { _log.Debug(ex, "Live-Puffer"); }
+    }
+
+    public int LiveSampleCount { get { lock (_liveLock) return _live16k.Count; } }
+
+    public float[] CopyLiveSamples(int start, int count)
+    {
+        lock (_liveLock)
+        {
+            start = Math.Clamp(start, 0, _live16k.Count);
+            count = Math.Clamp(count, 0, _live16k.Count - start);
+            var result = new float[count];
+            _live16k.CopyTo(start, result, 0, count);
+            return result;
+        }
     }
 
     private void ReportLevel(byte[] buffer, int bytes, WaveFormat fmt)

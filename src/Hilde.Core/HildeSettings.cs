@@ -19,6 +19,12 @@ public sealed class HildeSettings
     [JsonConverter(typeof(JsonStringEnumConverter))]
     public PerformanceTier PerformanceTier { get; set; } = PerformanceTier.Standard;
     public bool UseGpu { get; set; } = true;
+    /// <summary>Kurze Diktate mit verkleinertem Whisper-Kontext erkennen.</summary>
+    public bool FastShortDictation { get; set; } = true;
+    /// <summary>Live-Text in der Pill während des Sprechens (rechnet vor, Endfassung kommt schneller).</summary>
+    public bool LivePreview { get; set; } = true;
+    /// <summary>Eigener Modellordner (null = %LOCALAPPDATA%\HILDE\Models).</summary>
+    public string? ModelsDirectory { get; set; }
     public int ModelIdleUnloadMinutes { get; set; } = 5;
     public bool Autostart { get; set; }
     /// <summary>"system", "light", "dark".</summary>
@@ -65,6 +71,10 @@ public sealed class PillSettings
     public double? Left { get; set; }
     public double? Top { get; set; }
     public double Opacity { get; set; } = 0.92;
+    /// <summary>Hintergrundfarbe der Pill (#RRGGBB).</summary>
+    public string BackgroundColor { get; set; } = "#161A22";
+    /// <summary>Akzentfarbe für Aufnahme und Pegel (#RRGGBB).</summary>
+    public string AccentColor { get; set; } = "#34D399";
 }
 
 public sealed class ArchiveSettings

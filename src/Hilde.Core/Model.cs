@@ -29,7 +29,9 @@ public sealed record CapturedAudio(string WavPath, TimeSpan Duration, float Peak
 
 public sealed record TimedSegment(TimeSpan Start, TimeSpan End, string Text);
 
-public sealed record SpeechRequest(string WavPath, string Language, string? InitialPrompt);
+/// <param name="Fast">Kurze Aufnahmen mit verkleinertem Audio-Kontext erkennen (deutlich schneller).</param>
+/// <param name="Background">Vorschau/Hintergrund – Diktat-Endfassungen haben Vorrang.</param>
+public sealed record SpeechRequest(string WavPath, string Language, string? InitialPrompt, bool Fast = false, bool Background = false);
 
 public sealed record SpeechResult(string Text, string DetectedLanguage, IReadOnlyList<TimedSegment> Segments);
 

@@ -11,7 +11,24 @@ public sealed class HildePaths
     public string DatabaseFile => Path.Combine(Database, "hilde.db");
     public string Recordings => Path.Combine(Root, "Recordings");
     public string Transcripts => Path.Combine(Root, "Transcripts");
-    public string Models => Path.Combine(Root, "Models");
+    /// <summary>Eigener Modellordner aus den Einstellungen (null = Standard).</summary>
+    public string? ModelsOverride { get; set; }
+    public string DefaultModels => Path.Combine(Root, "Models");
+    public string Models => string.IsNullOrWhiteSpace(ModelsOverride) ? DefaultModels : ModelsOverride!;
+    /// <summary>Standardziel für Exporte: Dokumente\HILDE.</summary>
+    public static string ExportsFolder => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "HILDE");
+
+    /// <summary>Liegt der Pfad in einem OneDrive-Ordner (Synchronisierung in die Cloud)?</summary>
+    public static bool IsInOneDrive(string path)
+    {
+        var full = Path.GetFullPath(path);
+        foreach (var env in new[] { "OneDrive", "OneDriveCommercial", "OneDriveConsumer" })
+        {
+            var root = Environment.GetEnvironmentVariable(env);
+            if (!string.IsNullOrEmpty(root) && full.StartsWith(Path.GetFullPath(root), StringComparison.OrdinalIgnoreCase)) return true;
+        }
+        return full.Contains(Path.DirectorySeparatorChar + "OneDrive", StringComparison.OrdinalIgnoreCase);
+    }
     public string WhisperModels => Path.Combine(Models, "whisper");
     public string LlmModels => Path.Combine(Models, "llm");
     public string DiarizationModels => Path.Combine(Models, "diarization");
@@ -28,8 +45,7 @@ public sealed class HildePaths
 
     public void EnsureCreated()
     {
-        foreach (var dir in new[] { Root, Config, Database, Recordings, Transcripts, Models,
-                     WhisperModels, LlmModels, DiarizationModels, VadModels, Temp, Logs })
+        foreach (var dir in new[] { Root, Config, Database, Recordings, Transcripts, Temp, Logs })
         {
             Directory.CreateDirectory(dir);
         }

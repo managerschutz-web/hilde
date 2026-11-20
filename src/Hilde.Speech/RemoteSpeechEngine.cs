@@ -11,10 +11,10 @@ public sealed class RemoteSpeechEngine(EngineProcessClient client) : ISpeechReco
     public async Task<SpeechResult> TranscribeAsync(SpeechRequest request, CancellationToken ct)
     {
         // Diktate haben Vorrang vor Hintergrundaufträgen (Phase 3).
-        using var _ = await Client.Gate.EnterAsync(highPriority: true, ct).ConfigureAwait(false);
+        using var _ = await Client.Gate.EnterAsync(highPriority: !request.Background, ct).ConfigureAwait(false);
         // Timeout wird vom Aufrufer über ct gesteuert; hier großzügige Obergrenze.
         return await Client.CallAsync<SpeechResult>(EngineProtocol.Methods.Transcribe,
-            new TranscribeParams(request.WavPath, request.Language, request.InitialPrompt),
+            new TranscribeParams(request.WavPath, request.Language, request.InitialPrompt, request.Fast),
             TimeSpan.FromMinutes(30), ct).ConfigureAwait(false);
     }
 

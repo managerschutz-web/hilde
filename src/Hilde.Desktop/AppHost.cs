@@ -50,9 +50,10 @@ public sealed class AppHost : IAsyncDisposable
 
     private PerformanceTier Tier => _settings.Current.PerformanceTier;
 
-    public async Task StartAsync(bool startInTray)
+    public async Task StartAsync(bool startInTray, Func<Task>? beforeShow = null)
     {
         _settings = new JsonSettingsStore(_paths, Log.Logger);
+        _paths.ModelsOverride = _settings.Current.ModelsDirectory;
         // Autostart-Eintrag an den aktuellen Programmpfad anpassen (z. B. nach Update) bzw. Reste entfernen.
         try { Autostart.Apply(_settings.Current.Autostart); } catch (Exception ex) { _log.Debug(ex, "Autostart"); }
         _repo = new SqliteTranscriptRepository(_paths.DatabaseFile);
@@ -96,6 +97,7 @@ public sealed class AppHost : IAsyncDisposable
             w.Activate();
         });
         _controller.Completed += (_, r) => _bridge.Emit("transcript", new { r.Id });
+        _controller.PreviewChanged += (f, pv) => _ui.InvokeAsync(() => _pill?.SetPreview(f, pv));
 
         RegisterBridge();
         CreateUi();
@@ -124,6 +126,7 @@ public sealed class AppHost : IAsyncDisposable
             catch (Exception ex) { _log.Warning(ex, "Wiederherstellung"); }
         });
 
+        if (beforeShow != null) await beforeShow();
         if (!_settings.Current.SetupCompleted || !startInTray) ShowMainWindow();
     }
 
@@ -131,6 +134,7 @@ public sealed class AppHost : IAsyncDisposable
     {
         var s = _settings.Current;
         _pill = new PillWindow { Topmost = s.Pill.Topmost, Opacity = s.Pill.Opacity };
+        _pill.ApplyColors(s.Pill.BackgroundColor, s.Pill.AccentColor);
         _pill.MicClicked += () => _controller.ToggleHandsFree();
         _pill.ExpandClicked += ShowMainWindow;
         _pill.QuitRequested += Quit;
@@ -176,6 +180,7 @@ public sealed class AppHost : IAsyncDisposable
         {
             _pill.Topmost = s.Pill.Topmost;
             _pill.Opacity = s.Pill.Opacity;
+            _pill.ApplyColors(s.Pill.BackgroundColor, s.Pill.AccentColor);
             if (s.Pill.Visible && !_pill.IsVisible) { _pill.Show(); _pill.EnsureOnScreen(); }
             if (!s.Pill.Visible && _pill.IsVisible) _pill.Hide();
         }
@@ -337,8 +342,10 @@ public sealed class AppHost : IAsyncDisposable
             var format = p.Str("format") ?? "txt";
             return _ui.Invoke(() =>
             {
+                Directory.CreateDirectory(HildePaths.ExportsFolder);
                 var dlg = new Microsoft.Win32.SaveFileDialog
                 {
+                    InitialDirectory = HildePaths.ExportsFolder,
                     FileName = SafeFileName(r.Title) + "." + format,
                     Filter = format switch
                     {
@@ -431,6 +438,44 @@ public sealed class AppHost : IAsyncDisposable
             });
             return new { started = true };
         });
+        b.Register("models.location", _ => new
+        {
+            path = _paths.Models,
+            isDefault = string.IsNullOrWhiteSpace(_settings.Current.ModelsDirectory),
+            oneDrive = HildePaths.IsInOneDrive(_paths.Models)
+        });
+        b.Register("models.chooseFolder", _ => _ui.Invoke(() =>
+        {
+            var fd = new Microsoft.Win32.OpenFolderDialog { Title = "Neuen Speicherort für die HILDE-Modelle wählen" };
+            if (fd.ShowDialog(_main) != true) return (object?)new { cancelled = true };
+            var target = Path.Combine(fd.FolderName, "HILDE-Modelle");
+            return new { cancelled = false, path = target, oneDrive = HildePaths.IsInOneDrive(target),
+                         freeBytes = SystemCheck.FreeBytes(fd.FolderName) };
+        }));
+        b.RegisterAsync("models.move", async p =>
+        {
+            var target = p.Bool("reset") ? _paths.DefaultModels : p.Str("path") ?? throw new ArgumentException("Ordner fehlt");
+            if (_downloadCts != null) throw new HildeException(HildeErrors.Unexpected, detail: "Download läuft");
+            // Modelle freigeben, bevor Dateien verschoben werden
+            await _speechClient.StopAsync();
+            await _llmClient.StopAsync();
+            _vad.Dispose();
+            Directory.CreateDirectory(target);
+            int n = await Task.Run(() => _models.MoveAllAsync(target, CancellationToken.None));
+            var c = _settings.Current.Clone();
+            c.ModelsDirectory = p.Bool("reset") ? null : target;
+            _paths.ModelsOverride = c.ModelsDirectory;
+            _settings.Save(c);
+            return new { moved = n, path = _paths.Models };
+        });
+        b.Register("app.uninstallInfo", _ => Uninstaller.Find() is { } u ? new { available = true, kind = u.Kind } : new { available = false, kind = "" });
+        b.Register("app.uninstall", p =>
+        {
+            var entry = Uninstaller.Find() ?? throw new HildeException(HildeErrors.Unexpected, detail: "Kein Deinstallationseintrag gefunden");
+            Uninstaller.Launch(entry, p.Bool("deleteData"), _paths.Root);
+            Quit();
+            return null;
+        });
         b.Register("models.cancel", _ => { _downloadCts?.Cancel(); return null; });
         b.RegisterAsync("models.import", async p =>
         {
@@ -484,7 +529,7 @@ public sealed class AppHost : IAsyncDisposable
                 if (!vad.HasSpeech) return new { ok = false, message = HildeErrors.NoSpeech.Message };
                 var sw = Stopwatch.StartNew();
                 using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(3));
-                var sr = await _speech.TranscribeAsync(new SpeechRequest(audio.WavPath, _settings.Current.Language, _dictionary.InitialPrompt), cts.Token);
+                var sr = await _speech.TranscribeAsync(new SpeechRequest(audio.WavPath, _settings.Current.Language, _dictionary.InitialPrompt, Fast: _settings.Current.FastShortDictation), cts.Token);
                 var asr = sw.Elapsed.TotalSeconds;
                 var raw = HallucinationFilter.Clean(sr.Text, vad);
                 var tr = await _text.ProcessAsync(new TextRequest(_dictionary.Apply(raw), _settings.Current.TextMode,

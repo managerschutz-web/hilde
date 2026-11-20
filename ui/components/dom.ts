@@ -10,6 +10,8 @@ export function h<K extends keyof HTMLElementTagNameMap>(tag: K, props?: Props, 
       if (v === undefined || v === null || v === false) continue;
       if (k === 'class') el.className = String(v);
       else if (k === 'dataset') Object.assign(el.dataset, v);
+      // CSSOM statt style-Attribut: erlaubt unter der strengen Content-Security-Policy
+      else if (k === 'style') el.style.cssText = String(v);
       else if (k.startsWith('on') && typeof v === 'function') el.addEventListener(k.slice(2).toLowerCase(), v);
       else if (k === 'value' && 'value' in el) (el as any).value = v;
       else if (k === 'checked' && 'checked' in el) (el as any).checked = !!v;

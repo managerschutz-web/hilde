@@ -319,7 +319,7 @@ public sealed class AppHost : IAsyncDisposable
             {
                 record = r, hasAudio,
                 audioUrl = hasAudio ? $"https://{MainWindow.AudioHost}/{Uri.EscapeDataString(r.Id)}/{Path.GetFileName(r.AudioPath)}" : null,
-                segments = r.SegmentsJson == null ? null : JsonDocument.Parse(r.SegmentsJson).RootElement.Clone(),
+                segments = r.SegmentsJson == null ? (JsonElement?)null : JsonDocument.Parse(r.SegmentsJson).RootElement.Clone(),
                 keepAudio = _settings.Current.Archive.KeepAudio,
                 error = r.ErrorId == null ? null : HildeErrors.Get(r.ErrorId).Message
             };

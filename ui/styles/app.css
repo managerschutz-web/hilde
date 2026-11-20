@@ -139,7 +139,20 @@ input[role="switch"]:checked::after { left: 21px; }
 .title-input { font: 600 18px var(--font-display); border-color: transparent; border-bottom-color: var(--border); padding-left: 0; background: transparent; }
 .meta { color: var(--muted); font-size: 12.5px; margin: 6px 0 12px; }
 .note { color: var(--warn); }
-.tabs { display: flex; gap: 4px; margin-bottom: 8px; }
+.tabs { display: flex; gap: 4px; }
+.toolbar { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
+.tab[aria-pressed="true"] { color: var(--text); background: var(--surface-2); font-weight: 600; box-shadow: inset 0 -2px 0 var(--accent); }
+.btn.ai { border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); color: var(--accent-strong); background: var(--accent-soft); font-weight: 600; }
+.btn.ai:hover { filter: brightness(.97); }
+.compare { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.pane { display: grid; gap: 6px; min-width: 0; }
+.pane-head { display: flex; align-items: center; gap: 8px; font-size: 12.5px; font-weight: 600; color: var(--muted); min-height: 30px; }
+.input.mini { width: auto; min-height: 28px; padding: 2px 8px; font-size: 12.5px; }
+.banner.warn { background: color-mix(in srgb, var(--warn) 14%, transparent); color: var(--text); }
+.notes { margin-top: 6px; }
+.spinner { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--border); border-top-color: var(--accent); animation: spin .8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (max-width: 1250px) { .compare { grid-template-columns: 1fr; } }
 .tab { font: inherit; border: 0; background: none; color: var(--muted); padding: 6px 12px; border-radius: 6px; cursor: pointer; }
 .tab[aria-selected="true"] { color: var(--text); background: var(--surface-2); font-weight: 600; box-shadow: inset 0 -2px 0 var(--accent); }
 

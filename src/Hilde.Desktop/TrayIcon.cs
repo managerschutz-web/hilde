@@ -12,6 +12,8 @@ internal sealed class TrayIcon : IDisposable
 
     public event Action? OpenRequested;
     public event Action? ToggleDictationRequested;
+    public event Action? PauseRequested;
+    private readonly WinForms.ToolStripMenuItem _pause;
     public event Action? TogglePillRequested;
     public event Action? ExitRequested;
 
@@ -22,6 +24,8 @@ internal sealed class TrayIcon : IDisposable
         menu.Items.Add("HILDE öffnen", null, (_, _) => OpenRequested?.Invoke());
         _toggle = new WinForms.ToolStripMenuItem("Freihand-Diktat starten", null, (_, _) => ToggleDictationRequested?.Invoke());
         menu.Items.Add(_toggle);
+        _pause = new WinForms.ToolStripMenuItem("Pause / Fortsetzen", null, (_, _) => PauseRequested?.Invoke()) { Enabled = false };
+        menu.Items.Add(_pause);
         _pill = new WinForms.ToolStripMenuItem("Pill anzeigen", null, (_, _) => TogglePillRequested?.Invoke()) { CheckOnClick = false };
         menu.Items.Add(_pill);
         menu.Items.Add(new WinForms.ToolStripSeparator());
@@ -42,6 +46,7 @@ internal sealed class TrayIcon : IDisposable
         var t = "HILDE – " + text;
         _icon.Text = t.Length > 63 ? t[..63] : t;
         _toggle.Text = recording ? "Diktat beenden" : "Freihand-Diktat starten";
+        _pause.Enabled = recording;
     }
 
     public void SetPillVisible(bool visible) => _pill.Checked = visible;

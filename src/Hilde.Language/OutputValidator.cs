@@ -134,6 +134,32 @@ public static partial class OutputValidator
         return Verdict.Pass;
     }
 
+    /// <summary>
+    /// Für vom Nutzer geprüfte Überarbeitungen: Unterschiede als Hinweise (nichts wird verworfen).
+    /// </summary>
+    public static List<string> Differences(string input, string output, IReadOnlyList<string> protectedTerms)
+    {
+        var notes = new List<string>();
+        var inNums = Numbers(input);
+        var outNums = Numbers(output);
+        var allowed = new HashSet<string>(inNums);
+        foreach (var w in WordRx().Matches(input).Select(m => m.Value))
+            if (NumberWords.TryGetValue(w, out var n)) allowed.Add(n);
+        var missing = inNums.Where(n => !outNums.Contains(n)).ToList();
+        var added = outNums.Where(n => !allowed.Contains(n)).ToList();
+        if (missing.Count > 0) notes.Add("Fehlt: " + string.Join(", ", missing));
+        if (added.Count > 0) notes.Add("Neu hinzugekommen: " + string.Join(", ", added));
+        var lostTerms = protectedTerms.Where(t => t.Length > 0 && input.Contains(t, StringComparison.Ordinal) && !output.Contains(t, StringComparison.Ordinal)).ToList();
+        if (lostTerms.Count > 0) notes.Add("Begriff verändert/entfernt: " + string.Join(", ", lostTerms));
+        var lostLinks = LinkRx().Matches(input).Select(m => m.Value.TrimEnd('.', ',', ';', ':', '!', '?'))
+            .Where(l => !output.Contains(l, StringComparison.OrdinalIgnoreCase)).ToList();
+        if (lostLinks.Count > 0) notes.Add("Link/E-Mail fehlt: " + string.Join(", ", lostLinks));
+        var lostAcr = AcronymRx().Matches(input).Select(m => m.Value).Distinct()
+            .Where(a => !output.Contains(a, StringComparison.Ordinal)).ToList();
+        if (lostAcr.Count > 0) notes.Add("Kürzel fehlt: " + string.Join(", ", lostAcr));
+        return notes;
+    }
+
     private static HashSet<string> Numbers(string text) =>
         NumberRx().Matches(text).Select(m => m.Value.Replace(".", "").Replace(",", ".")).ToHashSet();
 

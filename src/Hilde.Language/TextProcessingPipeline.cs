@@ -114,6 +114,31 @@ public sealed partial class TextProcessingPipeline : ITextProcessingEngine
         return result;
     }
 
+    public sealed record RewriteResult(string Text, IReadOnlyList<string> Notes, double Seconds);
+
+    /// <summary>Nachbearbeitung auf Wunsch (Kürzen / Sachlich &amp; klar). Ergebnis wird vom Nutzer geprüft.</summary>
+    public async Task<RewriteResult> RewriteAsync(string text, RewriteKind kind, IReadOnlyList<string> protectedTerms, CancellationToken ct)
+    {
+        if (!IsAvailable) throw new HildeException(HildeErrors.LlmModelMissing);
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        // Absätze erhalten; sehr lange Texte in Blöcken bearbeiten
+        var blocks = SplitIntoChunks(text.Replace("\r\n", "\n"), 2500);
+        var output = new StringBuilder();
+        foreach (var block in blocks)
+        {
+            var prompt = PromptBuilder.BuildRewrite(_format(), kind, block, protectedTerms);
+            using var gate = await _client.Gate.EnterAsync(highPriority: false, ct).ConfigureAwait(false);
+            var r = await _client.CallAsync<GenerateResult>(EngineProtocol.Methods.Generate,
+                new GenerateParams(prompt.Prompt, prompt.MaxTokens, prompt.Stop, 0.2f),
+                TimeSpan.FromSeconds(60 + prompt.MaxTokens / 3.0), ct).ConfigureAwait(false);
+            if (output.Length > 0) output.Append("\n\n");
+            output.Append(OutputValidator.Normalize(r.Text, block));
+        }
+        var result = output.ToString().Trim();
+        if (result.Length == 0) throw new HildeException(HildeErrors.LlmFailed);
+        return new RewriteResult(result, OutputValidator.Differences(text, result, protectedTerms), sw.Elapsed.TotalSeconds);
+    }
+
     public Task<EngineHealth> HealthAsync(CancellationToken ct) => _client.HealthAsync(ct);
     public Task UnloadAsync() => _client.StopAsync();
 }

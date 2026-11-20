@@ -56,25 +56,101 @@ export function renderDictations(root: HTMLElement): () => void {
     selected = id;
     try {
       const { record: r, hasAudio, error } = await call<any>('transcripts.get', { id });
-      let variant: 'final' | 'clean' | 'raw' = 'final';
+      const info = await call<any>('app.info');
+      type Variant = 'final' | 'clean' | 'raw';
+      const LABEL: Record<Variant, string> = { final: 'Endfassung', clean: 'Bereinigt', raw: 'Original' };
+      const textOf = (v: Variant) => v === 'final' ? r.finalText : v === 'clean' ? r.cleanText : r.rawText;
+      let variant: Variant = 'final';
+      let sideBySide = false;
+      let compareWith: Variant = 'raw';
+
       const title = h('input', { class: 'input title-input', value: r.title, 'aria-label': 'Titel' });
-      const text = h('textarea', { class: 'textarea', 'aria-label': 'Text', spellcheck: 'true' }) as HTMLTextAreaElement;
+      const work = h('div', { class: 'work' });
       const tabs = h('div', { class: 'tabs', role: 'tablist' });
-      const save = debounce(async () => {
-        try { await call('transcripts.update', { id, title: title.value, finalText: variant === 'final' ? text.value : undefined }); }
-        catch (e) { toast(errorText(e), 'error'); }
+      const saveTitle = debounce(async () => {
+        try { await call('transcripts.update', { id, title: title.value }); } catch (e) { toast(errorText(e), 'error'); }
       }, 600);
-      const showVariant = (v: typeof variant) => {
-        variant = v;
-        text.value = v === 'final' ? r.finalText : v === 'clean' ? r.cleanText : r.rawText;
-        text.readOnly = v !== 'final';
-        tabs.querySelectorAll('button').forEach(b => b.setAttribute('aria-selected', String(b.dataset.v === v)));
+      const saveFinal = debounce(async () => {
+        try { await call('transcripts.update', { id, finalText: r.finalText }); } catch (e) { toast(errorText(e), 'error'); }
+      }, 600);
+      title.addEventListener('input', saveTitle);
+
+      const editor = (v: Variant) => {
+        const t = h('textarea', { class: 'textarea', 'aria-label': LABEL[v], spellcheck: 'true' }) as HTMLTextAreaElement;
+        t.value = textOf(v);
+        t.readOnly = v !== 'final';
+        if (v === 'final') t.addEventListener('input', () => { r.finalText = t.value; saveFinal(); });
+        return t;
       };
-      for (const [v, label] of [['final', 'Endfassung'], ['clean', 'Bereinigt'], ['raw', 'Original']] as const) {
-        tabs.append(h('button', { class: 'tab', role: 'tab', dataset: { v }, onclick: () => showVariant(v) }, label));
+      const pane = (label: Node | string, body: Node, extra?: Node | null) =>
+        h('div', { class: 'pane' }, h('div', { class: 'pane-head' }, label, extra ?? null), body);
+
+      const render = () => {
+        clear(work);
+        tabs.querySelectorAll('button').forEach(b => b.setAttribute('aria-selected', String(!sideBySide && b.dataset.v === variant)));
+        sideBtn.setAttribute('aria-pressed', String(sideBySide));
+        if (!sideBySide) { work.append(editor(variant)); return; }
+        const sel = h('select', { class: 'input mini', 'aria-label': 'Vergleichen mit', onchange: (e: Event) => { compareWith = (e.target as HTMLSelectElement).value as Variant; render(); } },
+          (['raw', 'clean'] as Variant[]).map(v => h('option', { value: v, selected: v === compareWith }, LABEL[v])));
+        work.append(h('div', { class: 'compare' }, pane(sel, editor(compareWith)), pane('Endfassung (bearbeitbar)', editor('final'))));
+      };
+
+      for (const v of ['final', 'clean', 'raw'] as Variant[]) {
+        tabs.append(h('button', { class: 'tab', role: 'tab', dataset: { v }, onclick: () => { variant = v; sideBySide = false; render(); } }, LABEL[v]));
       }
-      title.addEventListener('input', save);
-      text.addEventListener('input', () => { if (variant === 'final') { r.finalText = text.value; save(); } });
+      const sideBtn = h('button', { class: 'tab', 'aria-pressed': 'false', title: 'Original und Endfassung nebeneinander',
+        onclick: () => { sideBySide = !sideBySide; render(); } }, '⇆ Nebeneinander');
+
+      // KI-Nachbearbeitung mit Vorher/Nachher
+      const rewrite = async (kind: 'shorten' | 'clarify') => {
+        const source: Variant = sideBySide ? 'final' : variant;
+        const before = textOf(source);
+        if (!before.trim()) return;
+        const proposal = h('textarea', { class: 'textarea', 'aria-label': 'Vorschlag', spellcheck: 'true' }) as HTMLTextAreaElement;
+        proposal.value = '';
+        proposal.placeholder = 'HILDE überarbeitet … (das kann einige Sekunden dauern)';
+        proposal.readOnly = true;
+        const notes = h('div', { class: 'notes' });
+        const actions = h('div', { class: 'row' });
+        const kindLabel = kind === 'shorten' ? 'Gekürzt' : 'Sachlich & klar';
+        clear(work);
+        work.append(h('div', { class: 'compare' },
+          pane(`Vorher · ${LABEL[source]}`, (() => { const t = editor(source); t.readOnly = true; return t; })()),
+          pane(h('span', null, `Vorschlag · ${kindLabel}`), proposal, h('span', { class: 'spinner', 'aria-hidden': 'true' }))), notes, actions);
+        try {
+          const res = await call<any>('transcripts.rewrite', { id, kind, text: before }, 10 * 60000);
+          proposal.value = res.text;
+          proposal.readOnly = false;
+          work.querySelector('.spinner')?.remove();
+          const ratio = Math.round((1 - res.text.length / Math.max(1, before.length)) * 100);
+          notes.append(h('div', { class: 'muted small' },
+            `${res.seconds.toFixed(1)} s · ${ratio > 0 ? ratio + ' % kürzer' : Math.abs(ratio) + ' % länger'}`));
+          if (res.notes.length) notes.append(h('div', { class: 'banner warn' }, h('strong', null, 'Bitte prüfen: '), res.notes.join(' · ')));
+          clear(actions);
+          actions.append(
+            h('button', { class: 'btn primary', onclick: async () => {
+              r.finalText = proposal.value;
+              await call('transcripts.update', { id, finalText: r.finalText });
+              toast('Als Endfassung übernommen', 'ok');
+              variant = 'final'; sideBySide = false; render(); load();
+            } }, 'Übernehmen'),
+            h('button', { class: 'btn', onclick: async () => {
+              await navigator.clipboard.writeText(proposal.value).catch(() => { });
+              toast('Kopiert', 'ok');
+            } }, 'Kopieren'),
+            h('button', { class: 'btn', onclick: () => rewrite(kind) }, 'Nochmal'),
+            h('span', { class: 'spacer' }),
+            h('button', { class: 'btn', onclick: () => render() }, 'Verwerfen'));
+        } catch (e) {
+          work.querySelector('.spinner')?.remove();
+          notes.append(h('div', { class: 'banner error' }, errorText(e)));
+          actions.append(h('button', { class: 'btn', onclick: () => render() }, 'Zurück'));
+        }
+      };
+      const aiButtons = info.llm
+        ? [h('button', { class: 'btn ai', title: 'Text auf das Wesentliche kürzen', onclick: () => rewrite('shorten') }, '✂ Kürzen'),
+           h('button', { class: 'btn ai', title: 'Sachlicher und klarer formulieren', onclick: () => rewrite('clarify') }, '◎ Sachlich & klar')]
+        : [h('span', { class: 'muted small' }, 'KI-Bearbeitung: Modell in der Einrichtung laden')];
 
       clear(detail);
       const parts: (Node | null)[] = [
@@ -84,9 +160,10 @@ export function renderDictations(root: HTMLElement): () => void {
           r.targetApp ? ` · ${r.targetApp}` : '',
           r.fallbackReason ? h('span', { class: 'note' }, ' · ' + r.fallbackReason) : ''),
         error ? h('div', { class: 'banner error' }, `${error} (${r.errorId})`) : null,
-        tabs, text,
+        h('div', { class: 'toolbar' }, tabs, sideBtn, h('span', { class: 'spacer' }), ...aiButtons),
+        work,
         h('div', { class: 'row' },
-          h('button', { class: 'btn primary', onclick: async () => { await call('transcripts.copy', { id, variant }); toast('Kopiert', 'ok'); } }, 'Kopieren'),
+          h('button', { class: 'btn primary', onclick: async () => { await call('transcripts.copy', { id, variant: sideBySide ? 'final' : variant }); toast('Kopiert', 'ok'); } }, 'Kopieren'),
           h('button', { class: 'btn', onclick: () => exportAs(id, 'txt') }, 'Als TXT'),
           h('button', { class: 'btn', onclick: () => exportAs(id, 'md') }, 'Als Markdown'),
           h('button', { class: 'btn', onclick: () => exportAs(id, 'json') }, 'Als JSON'),
@@ -101,7 +178,7 @@ export function renderDictations(root: HTMLElement): () => void {
             }
           }, 'Löschen'))];
       detail.append(...parts.filter((p): p is Node => p !== null));
-      showVariant('final');
+      render();
       highlight(id);
     } catch (e) { toast(errorText(e), 'error'); }
   }

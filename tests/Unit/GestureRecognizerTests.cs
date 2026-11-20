@@ -96,3 +96,17 @@ public class GestureRecognizerTests
         Assert.True(g.IsRecording);
     }
 }
+
+public class GesturePauseTests
+{
+    [Fact]
+    public void Force_hands_free_keeps_recording_after_release()
+    {
+        var g = new Hilde.Core.GestureRecognizer();
+        g.TriggerDown(0);
+        g.ForceHandsFree();
+        Assert.Equal(Hilde.Core.GestureAction.None, g.TriggerUp(800));
+        Assert.True(g.IsHandsFree);
+        Assert.Equal(Hilde.Core.GestureAction.StopAndProcess, g.TriggerDown(5000));
+    }
+}

@@ -138,6 +138,7 @@ public sealed class AppHost : IAsyncDisposable
         _pill.MicClicked += () => _controller.ToggleHandsFree();
         _pill.ExpandClicked += ShowMainWindow;
         _pill.QuitRequested += Quit;
+        _pill.PauseClicked += () => _controller.TogglePause();
         _pill.HideRequested += () =>
         {
             var c = _settings.Current.Clone();
@@ -165,6 +166,7 @@ public sealed class AppHost : IAsyncDisposable
         _tray.SetPillVisible(s.Pill.Visible);
         _tray.OpenRequested += () => _ui.InvokeAsync(ShowMainWindow);
         _tray.ToggleDictationRequested += () => _controller.ToggleHandsFree();
+        _tray.PauseRequested += () => _controller.TogglePause();
         _tray.TogglePillRequested += () =>
         {
             var c = _settings.Current.Clone();
@@ -201,7 +203,7 @@ public sealed class AppHost : IAsyncDisposable
         _ui.InvokeAsync(() =>
         {
             _pill?.SetStatus(e);
-            _tray?.SetStatus(e.Message ?? e.State.ToString(), e.State == HildeState.Recording);
+            _tray?.SetStatus(e.Message ?? e.State.ToString(), e.State is HildeState.Recording or HildeState.Paused);
         });
         _bridge.Emit("status", e);
         if (e.State == HildeState.Recording) ScheduleWarmUp();
@@ -247,6 +249,7 @@ public sealed class AppHost : IAsyncDisposable
             dataPath = _paths.Root,
             hotkey = _settings.Current.Hotkey.DisplayName,
             state = _controller.State,
+            llm = _text.IsAvailable,
         });
         b.Register("app.quit", _ => { Quit(); return null; });
         b.Register("app.openLogs", _ => { OpenFolder(_paths.Logs); return null; });
@@ -327,6 +330,15 @@ public sealed class AppHost : IAsyncDisposable
             TryDeleteDir(_paths.RecordingDir(id));
             TryDeleteDir(Path.Combine(_paths.Transcripts, id));
             return null;
+        });
+        b.RegisterAsync("transcripts.rewrite", async p =>
+        {
+            var r = await _repo.GetAsync(p.Str("id") ?? "") ?? throw new ArgumentException("Nicht gefunden");
+            var source = p.Str("source") switch { "raw" => r.RawText, "clean" => r.CleanText, _ => r.FinalText };
+            if (p.Str("text") is { Length: > 0 } custom) source = custom; // aktuell im Editor angezeigter Text
+            var kind = p.Str("kind") == "shorten" ? RewriteKind.Shorten : RewriteKind.Clarify;
+            var res = await _text.RewriteAsync(source, kind, _dictionary.ProtectedTerms, CancellationToken.None);
+            return new { text = _dictionary.Apply(res.Text), notes = res.Notes, seconds = res.Seconds, source };
         });
         b.RegisterAsync("transcripts.reprocess", async p => await _controller.ReprocessAsync(p.Str("id") ?? ""));
         b.RegisterAsync("transcripts.copy", async p =>

@@ -23,6 +23,8 @@ public interface IAudioCaptureService : IDisposable
     CapturedAudio NormalizeFile(string rawWavPath, string outWavPath);
     /// <summary>Anzahl bisher aufgenommener Samples als 16 kHz Mono (Live-Vorschau).</summary>
     int LiveSampleCount { get; }
+    /// <summary>Aufnahme pausieren: Mikrofon bleibt offen, es wird aber nichts gespeichert.</summary>
+    bool Paused { get; set; }
     /// <summary>Kopie eines Ausschnitts der laufenden Aufnahme (16 kHz Mono).</summary>
     float[] CopyLiveSamples(int start, int count);
 }

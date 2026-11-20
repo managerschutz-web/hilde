@@ -37,6 +37,9 @@ public sealed class WasapiCaptureService : IAudioCaptureService
 
     public bool IsRecording { get { lock (_lock) return _capture != null; } }
 
+    private volatile bool _paused;
+    public bool Paused { get => _paused; set => _paused = value; }
+
     public WasapiCaptureService(ILogger log) => _log = log.ForContext<WasapiCaptureService>();
 
     public IReadOnlyList<AudioDeviceInfo> GetInputDevices()
@@ -107,6 +110,7 @@ public sealed class WasapiCaptureService : IAudioCaptureService
                 _liveOut = capture.WaveFormat.SampleRate == WavIO.SampleRate ? src : new WdlResamplingSampleProvider(src, WavIO.SampleRate);
             }
             _cancelled = false;
+            _paused = false;
             _peak = 0;
             _stopped = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             capture.DataAvailable += OnData;
@@ -127,6 +131,7 @@ public sealed class WasapiCaptureService : IAudioCaptureService
 
     private void OnData(object? sender, WaveInEventArgs e)
     {
+        if (_paused) return; // pausiert: nichts speichern, Pegel bleibt bei 0
         WaveFileWriter? w;
         WaveFormat fmt;
         lock (_lock)

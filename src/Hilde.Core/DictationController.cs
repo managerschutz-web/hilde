@@ -95,6 +95,24 @@ public sealed class DictationController : IAsyncDisposable
         _actions.Writer.TryWrite(action);
     }
 
+    public bool IsPaused => _current != null && _audio.Paused;
+
+    /// <summary>Laufende Aufnahme pausieren bzw. fortsetzen (Pill/Tray).</summary>
+    public void TogglePause()
+    {
+        var ctx = _current;
+        if (ctx == null) return;
+        // Push-to-Talk in Freihand umwandeln, sonst würde Loslassen die pausierte Aufnahme beenden
+        if (ctx.Mode == RecordingMode.PushToTalk) { ctx.Mode = RecordingMode.HandsFree; lock (Gestures) Gestures.ForceHandsFree(); }
+        _audio.Paused = !_audio.Paused;
+        if (_audio.Paused)
+        {
+            LevelChanged?.Invoke(this, 0);
+            SetState(HildeState.Paused, "Pausiert – zum Fortsetzen ⏵ klicken", mode: RecordingMode.HandsFree);
+        }
+        else SetState(HildeState.Recording, "Freihand – zum Beenden Taste erneut drücken", mode: RecordingMode.HandsFree);
+    }
+
     /// <summary>Pill/Tray: Freihandaufnahme starten oder beenden.</summary>
     public void ToggleHandsFree()
     {

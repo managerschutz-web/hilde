@@ -54,6 +54,16 @@
                 <Rectangle Width="3" Height="4" RadiusX="1.5" RadiusY="1.5" Margin="1,0" VerticalAlignment="Center" Fill="#5534D399"/>
             </StackPanel>
 
+            <Border x:Name="PauseButton" Width="26" Height="26" CornerRadius="13" Background="#22FFFFFF" Cursor="Hand"
+                    Margin="0,0,4,0" Visibility="Collapsed" MouseLeftButtonDown="OnButtonDown" MouseLeftButtonUp="OnPauseClick"
+                    ToolTip="Pause / Fortsetzen">
+                <Grid>
+                    <Path x:Name="PauseIcon" Data="M0,0 L3,0 L3,10 L0,10 Z M6,0 L9,0 L9,10 L6,10 Z" Fill="#F0F4FA"
+                          Width="9" Height="10" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    <Path x:Name="PlayIcon" Data="M0,0 L9,5 L0,10 Z" Fill="#F0F4FA" Visibility="Collapsed"
+                          Width="9" Height="10" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="2,0,0,0"/>
+                </Grid>
+            </Border>
             <Border Width="26" Height="26" CornerRadius="13" Background="Transparent" Cursor="Hand" MouseLeftButtonDown="OnButtonDown"
                     MouseLeftButtonUp="OnExpandClick" ToolTip="HILDE öffnen">
                 <Path Data="M0,0 L5,5 L10,0" Stroke="#C7CDD6" StrokeThickness="1.8" Width="10" Height="6"

@@ -123,6 +123,12 @@ public sealed class GestureRecognizer
         return GestureAction.None;
     }
 
+    /// <summary>Laufende Push-to-Talk-Aufnahme in Freihand umwandeln (z. B. beim Pausieren).</summary>
+    public void ForceHandsFree()
+    {
+        if (_state == S.Held) _state = S.HandsFreeHeld;
+    }
+
     /// <summary>Nach Fehlern oder externem Abbruch zurücksetzen.</summary>
     public void Reset() => _state = S.Idle;
 }

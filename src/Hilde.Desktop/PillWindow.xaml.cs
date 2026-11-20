@@ -41,6 +41,7 @@ public partial class PillWindow : Window
     public event Action? ExpandClicked;
     public event Action<double, double>? PositionChanged;
     public event Action? HideRequested;
+    public event Action? PauseClicked;
     public event Action? QuitRequested;
 
     public PillWindow()
@@ -89,6 +90,8 @@ public partial class PillWindow : Window
         StatusText.Foreground = new SolidColorBrush(fg);
         PreviewText.Foreground = new SolidColorBrush(fg);
         MicIcon.Fill = new SolidColorBrush(fg);
+        PauseIcon.Fill = new SolidColorBrush(fg);
+        PlayIcon.Fill = new SolidColorBrush(fg);
         Apply(new StatusEventArgs(_state));
     }
 
@@ -173,6 +176,10 @@ public partial class PillWindow : Window
         MicButton.Background = e.State == HildeState.Recording
             ? new SolidColorBrush(Color.FromArgb(0x55, _accent.R, _accent.G, _accent.B))
             : new SolidColorBrush(Color.FromArgb(0x26, 0xFF, 0xFF, 0xFF));
+        bool active = e.State is HildeState.Recording or HildeState.Paused;
+        PauseButton.Visibility = active ? Visibility.Visible : Visibility.Collapsed;
+        PauseIcon.Visibility = e.State == HildeState.Paused ? Visibility.Collapsed : Visibility.Visible;
+        PlayIcon.Visibility = e.State == HildeState.Paused ? Visibility.Visible : Visibility.Collapsed;
         bool processing = e.State == HildeState.Processing;
         Spinner.Visibility = processing ? Visibility.Visible : Visibility.Collapsed;
         MicIcon.Opacity = processing ? 0.35 : 1;
@@ -215,6 +222,8 @@ public partial class PillWindow : Window
     private void OnButtonDown(object sender, MouseButtonEventArgs e) => e.Handled = true; // kein Ziehen über Schaltflächen
 
     private void OnMicClick(object sender, MouseButtonEventArgs e) { e.Handled = true; MicClicked?.Invoke(); }
+
+    private void OnPauseClick(object sender, MouseButtonEventArgs e) { e.Handled = true; PauseClicked?.Invoke(); }
 
     private void OnMenuOpen(object sender, RoutedEventArgs e) => ExpandClicked?.Invoke();
     private void OnMenuHide(object sender, RoutedEventArgs e) => HideRequested?.Invoke();

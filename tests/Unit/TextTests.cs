@@ -189,3 +189,35 @@ public class SmartCleanTests
     public void Decides_when_model_is_needed(string text, bool expected) =>
         Assert.Equal(expected, TextProcessingPipeline.NeedsModel(text));
 }
+
+public class RewriteTests
+{
+    [Fact]
+    public void Lists_missing_and_new_facts()
+    {
+        var notes = OutputValidator.Differences(
+            "Bitte bis 15.12. die 250 Euro an MARTENS & PRAHL überweisen, Kontakt info@mpsaar.de, eVB folgt.",
+            "Bitte 350 Euro überweisen.",
+            ["MARTENS & PRAHL"]);
+        Assert.Contains(notes, n => n.StartsWith("Fehlt") && n.Contains("250"));
+        Assert.Contains(notes, n => n.StartsWith("Neu") && n.Contains("350"));
+        Assert.Contains(notes, n => n.Contains("MARTENS & PRAHL"));
+        Assert.Contains(notes, n => n.Contains("info@mpsaar.de"));
+        Assert.Contains(notes, n => n.Contains("eVB"));
+    }
+
+    [Fact]
+    public void No_notes_when_facts_kept()
+    {
+        Assert.Empty(OutputValidator.Differences("Termin am 3. Mai um 10 Uhr.", "Termin: 3. Mai, 10 Uhr.", []));
+    }
+
+    [Fact]
+    public void Rewrite_prompts_differ_by_kind()
+    {
+        var a = PromptBuilder.BuildRewrite(PromptFormat.ChatMl, RewriteKind.Shorten, "Text", []);
+        var b = PromptBuilder.BuildRewrite(PromptFormat.ChatMl, RewriteKind.Clarify, "Text", []);
+        Assert.Contains("Kürze", a.Prompt);
+        Assert.Contains("sachlich", b.Prompt);
+    }
+}

@@ -40,7 +40,7 @@ export function renderDictations(root) {
     async function select(id) {
         selected = id;
         try {
-            const { record: r, hasAudio, error } = await call('transcripts.get', { id });
+            const { record: r, hasAudio, error, audioUrl, segments, keepAudio } = await call('transcripts.get', { id });
             const info = await call('app.info');
             const LABEL = { final: 'Endfassung', clean: 'Bereinigt', raw: 'Original' };
             const textOf = (v) => v === 'final' ? r.finalText : v === 'clean' ? r.cleanText : r.rawText;
@@ -71,11 +71,51 @@ export function renderDictations(root) {
                 const t = h('textarea', { class: 'textarea', 'aria-label': LABEL[v], spellcheck: 'true' });
                 t.value = textOf(v);
                 t.readOnly = v !== 'final';
-                if (v === 'final')
+                if (v === 'final') {
                     t.addEventListener('input', () => { r.finalText = t.value; saveFinal(); });
+                    // Lernen aus Korrekturen: beim Verlassen des Feldes Änderungen auswerten
+                    let atFocus = t.value;
+                    t.addEventListener('focus', () => { atFocus = t.value; });
+                    t.addEventListener('blur', () => { if (t.value !== atFocus)
+                        suggest(atFocus, t.value); });
+                }
                 return t;
             };
             const pane = (label, body, extra) => h('div', { class: 'pane' }, h('div', { class: 'pane-head' }, label, extra ?? null), body);
+            const suggestBox = h('div', { class: 'suggest' });
+            const suggest = async (before, after) => {
+                try {
+                    const list = await call('transcripts.suggestRules', { before, after });
+                    for (const sg of list) {
+                        const row = h('div', { class: 'banner learn' }, h('span', null, 'Als Regel speichern? ', h('code', null, sg.from), ' → ', h('code', null, sg.to)), h('span', { class: 'spacer' }), h('button', { class: 'btn small primary', onclick: async () => {
+                                await call('dictionary.saveRule', { id: 0, pattern: sg.from, replacement: sg.to, wholeWord: true, caseSensitive: false, enabled: true, sortOrder: 0 });
+                                toast('Regel gespeichert – gilt ab dem nächsten Diktat', 'ok');
+                                row.remove();
+                            } }, 'Speichern'), h('button', { class: 'btn small', onclick: () => row.remove() }, 'Nein'));
+                        suggestBox.append(row);
+                    }
+                }
+                catch { /* Vorschläge sind optional */ }
+            };
+            // Audio-Wiedergabe mit anklickbaren Abschnitten
+            const audioBox = h('div', { class: 'audio' });
+            if (audioUrl) {
+                const player = h('audio', { controls: true, preload: 'metadata', src: audioUrl });
+                let stopAt = Infinity;
+                player.addEventListener('timeupdate', () => { if (player.currentTime >= stopAt) {
+                    player.pause();
+                    stopAt = Infinity;
+                } });
+                const segs = Array.isArray(segments) ? segments : [];
+                audioBox.append(h('div', { class: 'audio-head' }, h('strong', null, 'Aufnahme'), player));
+                if (segs.length)
+                    audioBox.append(h('div', { class: 'segs' }, segs.map(sg => h('button', {
+                        class: 'seg', title: 'Diese Stelle abspielen', onclick: () => { player.currentTime = sg.s; stopAt = sg.e + 0.15; player.play(); }
+                    }, h('span', { class: 'seg-time' }, fmtClock(sg.s)), sg.t))));
+            }
+            else if (!keepAudio) {
+                audioBox.append(h('div', { class: 'muted small' }, 'Keine Aufnahme gespeichert. Für die Wiedergabe in den Einstellungen „Audio behalten“ einschalten.'));
+            }
             const render = () => {
                 clear(work);
                 tabs.querySelectorAll('button').forEach(b => b.setAttribute('aria-selected', String(!sideBySide && b.dataset.v === variant)));
@@ -146,7 +186,7 @@ export function renderDictations(root) {
                 h('div', { class: 'meta' }, `${fmtDate(r.createdUtc)} · ${fmtDuration(r.durationMs)} · ${r.language?.toUpperCase() ?? ''} · ${MODE_LABEL[r.mode] ?? r.mode}`, r.targetApp ? ` · ${r.targetApp}` : '', r.fallbackReason ? h('span', { class: 'note' }, ' · ' + r.fallbackReason) : ''),
                 error ? h('div', { class: 'banner error' }, `${error} (${r.errorId})`) : null,
                 h('div', { class: 'toolbar' }, tabs, sideBtn, h('span', { class: 'spacer' }), ...aiButtons),
-                work,
+                work, suggestBox, audioBox,
                 h('div', { class: 'row' }, h('button', { class: 'btn primary', onclick: async () => { await call('transcripts.copy', { id, variant: sideBySide ? 'final' : variant }); toast('Kopiert', 'ok'); } }, 'Kopieren'), h('button', { class: 'btn', onclick: () => exportAs(id, 'txt') }, 'Als TXT'), h('button', { class: 'btn', onclick: () => exportAs(id, 'md') }, 'Als Markdown'), h('button', { class: 'btn', onclick: () => exportAs(id, 'json') }, 'Als JSON'), (r.status === 'failed' && hasAudio)
                     ? h('button', { class: 'btn', onclick: async () => { await call('transcripts.reprocess', { id }); toast('Wird erneut verarbeitet …'); } }, 'Erneut verarbeiten')
                     : null, h('span', { class: 'spacer' }), h('button', {
@@ -167,6 +207,10 @@ export function renderDictations(root) {
         catch (e) {
             toast(errorText(e), 'error');
         }
+    }
+    function fmtClock(sec) {
+        const m = Math.floor(sec / 60), s = Math.floor(sec % 60);
+        return `${m}:${String(s).padStart(2, '0')}`;
     }
     function highlight(id) {
         list.querySelectorAll('.item').forEach(n => {

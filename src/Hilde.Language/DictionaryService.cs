@@ -9,6 +9,9 @@ public sealed class DictionaryService(ITranscriptRepository repo) : IDictionaryS
     private volatile CompiledRule[] _rules = [];
     private volatile string[] _protected = [];
     private volatile string? _prompt;
+    private volatile Snippet[] _snippets = [];
+
+    public IReadOnlyList<Snippet> Snippets => _snippets;
 
     public IReadOnlyList<string> ProtectedTerms => _protected;
     public string? InitialPrompt => _prompt;
@@ -17,6 +20,7 @@ public sealed class DictionaryService(ITranscriptRepository repo) : IDictionaryS
     {
         var rules = await repo.GetReplacementsAsync().ConfigureAwait(false);
         var terms = await repo.GetTermsAsync().ConfigureAwait(false);
+        _snippets = (await repo.GetSnippetsAsync().ConfigureAwait(false)).ToArray();
         _rules = rules.Where(r => r.Enabled && r.Pattern.Trim().Length > 0)
             .OrderBy(r => r.SortOrder).ThenBy(r => r.Id)
             .Select(Compile).ToArray();

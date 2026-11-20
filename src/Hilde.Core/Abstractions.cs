@@ -97,6 +97,9 @@ public interface ITranscriptRepository
     Task<IReadOnlyList<VocabularyTerm>> GetTermsAsync();
     Task<VocabularyTerm> SaveTermAsync(VocabularyTerm term);
     Task DeleteTermAsync(long id);
+    Task<IReadOnlyList<Snippet>> GetSnippetsAsync();
+    Task<Snippet> SaveSnippetAsync(Snippet snippet);
+    Task DeleteSnippetAsync(long id);
 }
 
 public interface ISettingsStore

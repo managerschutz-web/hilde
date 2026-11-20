@@ -8,5 +8,7 @@ public interface IDictionaryService
     IReadOnlyList<string> ProtectedTerms { get; }
     /// <summary>Erkennungshilfe für Whisper (Fachbegriffe/Eigennamen als Prompt).</summary>
     string? InitialPrompt { get; }
+    /// <summary>Textbausteine („Baustein &lt;Name&gt;“).</summary>
+    IReadOnlyList<Snippet> Snippets { get; }
     Task ReloadAsync();
 }

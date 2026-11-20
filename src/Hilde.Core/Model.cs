@@ -81,6 +81,8 @@ public sealed class TranscriptRecord
     public string? ErrorId { get; set; }
     public string? FallbackReason { get; set; }
     public string? SpeakersJson { get; set; }
+    /// <summary>Erkannte Abschnitte mit Zeitmarken (für Audio-Wiedergabe im Archiv).</summary>
+    public string? SegmentsJson { get; set; }
 }
 
 public sealed record TranscriptQuery(string? Search, TranscriptKind? Kind, int Limit = 200, int Offset = 0);

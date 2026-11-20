@@ -88,6 +88,8 @@ export function renderSettings(root: HTMLElement): () => void {
             toggle('Esc verwirft die laufende Aufnahme', s.hotkey.escapeCancels, v => s.hotkey.escapeCancels = v),
             toggle('Live-Text während des Sprechens', s.livePreview, v => s.livePreview = v,
               'Zeigt den erkannten Text in der Pill und rechnet schon vor – lange Diktate sind danach schneller fertig.'),
+            toggle('Diktierbefehle', s.dictationCommands, v => s.dictationCommands = v,
+              '„neuer Absatz“, „neue Zeile“ und „Doppelpunkt“ werden umgesetzt.'),
             toggle('Schnellmodus für kurze Diktate', s.fastShortDictation, v => s.fastShortDictation = v,
               'Kurze Aufnahmen werden mit kleinerem Rechenfenster erkannt. Bei Erkennungsproblemen testweise ausschalten.')),
           section('Mikrofon',
@@ -97,6 +99,13 @@ export function renderSettings(root: HTMLElement): () => void {
             select('Sprache', s.language, [['de', 'Deutsch'], ['en', 'Englisch'], ['auto', 'Automatisch erkennen']], v => s.language = v),
             select('Textbearbeitung', s.textMode, [['Original', 'Original – unverändert'], ['Clean', 'Bereinigt – Satzzeichen, Füllwörter, Selbstkorrekturen'], ['Professional', 'Professionell – zusätzlich Grammatik und Stil']], v => s.textMode = v,
               'Die KI ändert keine Fakten, Namen, Beträge oder Termine. Im Zweifel wird ihr Ergebnis verworfen.')),
+          section('Formatierung',
+            h('p', { class: 'muted small' }, 'Gilt in den Modi „Bereinigt“ und „Professionell“.'),
+            toggle('Beträge', s.format.amounts, v => s.format.amounts = v, '„1250 Euro“ → 1.250 €, „99,5 Euro“ → 99,50 €'),
+            toggle('Datumsangaben', s.format.dates, v => s.format.dates = v, '„3. Mai 2026“ → 03.05.2026'),
+            toggle('Uhrzeiten', s.format.times, v => s.format.times = v, '„10 Uhr 30“ → 10:30 Uhr'),
+            toggle('Prozent', s.format.percent, v => s.format.percent = v, '„5 Prozent“ → 5 %'),
+            toggle('IBAN und Kennzeichen', s.format.codes, v => s.format.codes = v, 'IBAN in Viererblöcken, „Kennzeichen IGB AB 123“ → IGB-AB 123')),
           section('Einfügen',
             select('Methode', s.insertion.method, [['Auto', 'Automatisch (Zwischenablage + Einfügen)'], ['Clipboard', 'Immer Zwischenablage'], ['Typing', 'Zeichenweise tippen (ohne Zwischenablage)']], v => s.insertion.method = v),
             toggle('Zwischenablage danach wiederherstellen', s.insertion.restoreClipboard, v => s.insertion.restoreClipboard = v,
@@ -116,13 +125,15 @@ export function renderSettings(root: HTMLElement): () => void {
                 }, h('span', null), name)))),
           section('Archiv',
             toggle('Diktate im Archiv speichern', s.archive.enabled, v => s.archive.enabled = v),
-            toggle('Audio behalten', s.archive.keepAudio, v => s.archive.keepAudio = v, 'Standard: Audio wird nach erfolgreicher Verarbeitung gelöscht.')),
+            toggle('Audio behalten', s.archive.keepAudio, v => s.archive.keepAudio = v, 'Nötig für die Wiedergabe im Archiv. Standard: Audio wird nach der Verarbeitung gelöscht.'),
+            number('Audio automatisch löschen nach', s.archive.audioRetentionDays, 0, 3650, 1, 'Tagen (0 = nie)', v => s.archive.audioRetentionDays = v)),
           section('Leistung & Modelle',
             select('Leistungsstufe', s.performanceTier, [['Light', 'Leicht (ab ca. 8 GB RAM)'], ['Standard', 'Standard (ab ca. 16 GB RAM)']], v => s.performanceTier = v),
             toggle('Grafikkarte nutzen (Vulkan)', s.useGpu, v => s.useGpu = v, 'Bei Problemen schaltet HILDE automatisch auf die CPU um.'),
             number('Modelle entladen nach', s.modelIdleUnloadMinutes, 1, 240, 1, 'min Inaktivität', v => s.modelIdleUnloadMinutes = v),
             h('div', { class: 'row' }, h('span', { class: 'muted' }, `${installed} von ${models.models.length} Modellen installiert · noch ${fmtBytes(models.requiredBytes)} · frei ${fmtBytes(models.freeBytes)}`),
-              h('button', { class: 'btn', onclick: () => openSetup(3) }, 'Modelle verwalten')),
+              h('button', { class: 'btn', onclick: () => openSetup(3) }, 'Modelle verwalten'),
+              h('button', { class: 'btn', onclick: checkUpdates }, 'Nach neuen Modellen suchen')),
             h('div', { class: 'field' }, h('span', null, 'Speicherort der Modelle'),
               h('code', { class: 'path' }, loc.path),
               loc.oneDrive ? h('small', { class: 'warn' }, 'Achtung: Dieser Ordner liegt in OneDrive und wird in die Cloud synchronisiert.') : null,
@@ -149,6 +160,22 @@ export function renderSettings(root: HTMLElement): () => void {
   function colorRow(label: string, value: string, set: (v: string) => void) {
     const inp = h('input', { type: 'color', class: 'color', value, onchange: (e: Event) => { set((e.target as HTMLInputElement).value.toUpperCase()); persist(); } });
     return h('label', { class: 'field inline' }, h('span', null, label), inp);
+  }
+
+  async function checkUpdates(): Promise<void> {
+    toast('Suche nach neuen Modellen …', 'info', 2000);
+    const r = await call<any>('models.checkUpdates', { tier: s.performanceTier }, 30000);
+    if (!r.ok) { toast(r.message, 'error', 6000); return; }
+    if (!r.available) { toast('Alles aktuell – keine neuen geprüften Modelle.', 'ok'); return; }
+    const list = r.newModels.map((m: any) => `• ${m.displayName} (${fmtBytes(m.sizeBytes)}, ${m.license})${m.replaces ? `\n   ersetzt: ${m.replaces}` : ''}`).join('\n');
+    if (!await confirmDialog('Neue Modelle verfügbar', `Modellliste vom ${r.remoteDate}:\n\n${list}\n\nJetzt herunterladen und installieren? Die bisherigen Modelle werden erst entfernt, wenn die neuen geprüft sind.`, 'Installieren')) return;
+    await call('models.applyUpdate', { tier: s.performanceTier });
+    toast('Neue Modelle werden geladen – Fortschritt unter „Modelle verwalten“.', 'info', 6000);
+    const off = on('modelsDone', (d: any) => {
+      off();
+      toast(d.ok ? `Neue Modelle installiert${d.removed ? `, ${d.removed} alte entfernt` : ''}.` : d.message, d.ok ? 'ok' : 'error', 7000);
+      draw();
+    });
   }
 
   async function moveModels(): Promise<void> {

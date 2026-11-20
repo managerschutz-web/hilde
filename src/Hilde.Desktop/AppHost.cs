@@ -62,7 +62,7 @@ public sealed class AppHost : IAsyncDisposable
         await _dictionary.ReloadAsync();
 
         var manifestPath = Path.Combine(AppContext.BaseDirectory, "models", "manifest.json");
-        _models = new ModelManager(_paths, ModelManifest.Load(manifestPath), Log.Logger);
+        _models = new ModelManager(_paths, ModelManager.LoadEffective(manifestPath, _paths), Log.Logger);
         _models.Progress += (_, p) => _bridge.Emit("modelProgress", p);
 
         var engineExe = Path.Combine(AppContext.BaseDirectory, "Hilde.Engine.exe");
@@ -116,6 +116,7 @@ public sealed class AppHost : IAsyncDisposable
         }
 
         _paths.CleanTemp(TimeSpan.FromDays(1));
+        _ = Task.Run(CleanupOldAudioAsync);
         _ = Task.Run(async () =>
         {
             try
@@ -313,7 +314,15 @@ public sealed class AppHost : IAsyncDisposable
         b.RegisterAsync("transcripts.get", async p =>
         {
             var r = await _repo.GetAsync(p.Str("id") ?? "") ?? throw new ArgumentException("Nicht gefunden");
-            return new { record = r, hasAudio = r.AudioPath != null && File.Exists(r.AudioPath), error = r.ErrorId == null ? null : HildeErrors.Get(r.ErrorId).Message };
+            bool hasAudio = r.AudioPath != null && File.Exists(r.AudioPath);
+            return new
+            {
+                record = r, hasAudio,
+                audioUrl = hasAudio ? $"https://{MainWindow.AudioHost}/{Uri.EscapeDataString(r.Id)}/{Path.GetFileName(r.AudioPath)}" : null,
+                segments = r.SegmentsJson == null ? null : JsonDocument.Parse(r.SegmentsJson).RootElement.Clone(),
+                keepAudio = _settings.Current.Archive.KeepAudio,
+                error = r.ErrorId == null ? null : HildeErrors.Get(r.ErrorId).Message
+            };
         });
         b.RegisterAsync("transcripts.update", async p =>
         {
@@ -322,6 +331,13 @@ public sealed class AppHost : IAsyncDisposable
             if (p.Str("finalText") is { } text) r.FinalText = text; // Roh- und Bereinigt-Text bleiben unverändert
             await _repo.SaveAsync(r);
             return null;
+        });
+        b.RegisterAsync("transcripts.suggestRules", async p =>
+        {
+            var before = p.Str("before") ?? "";
+            var after = p.Str("after") ?? "";
+            if (before == after) return Array.Empty<RuleSuggestion>();
+            return CorrectionLearner.Suggest(before, after, await _repo.GetReplacementsAsync());
         });
         b.RegisterAsync("transcripts.delete", async p =>
         {
@@ -376,7 +392,23 @@ public sealed class AppHost : IAsyncDisposable
         b.RegisterAsync("dictionary.get", async _ => new
         {
             rules = await _repo.GetReplacementsAsync(),
-            terms = await _repo.GetTermsAsync()
+            terms = await _repo.GetTermsAsync(),
+            snippets = await _repo.GetSnippetsAsync()
+        });
+        b.RegisterAsync("dictionary.saveSnippet", async p =>
+        {
+            var name = (p.Str("name") ?? "").Trim();
+            var text = p.Str("text") ?? "";
+            if (name.Length == 0 || text.Trim().Length == 0) throw new ArgumentException("Name und Text angeben");
+            var saved = await _repo.SaveSnippetAsync(new Snippet(p.Long("id"), name, text.Replace("\r\n", "\n")));
+            await _dictionary.ReloadAsync();
+            return saved;
+        });
+        b.RegisterAsync("dictionary.deleteSnippet", async p =>
+        {
+            await _repo.DeleteSnippetAsync(p.Long("id"));
+            await _dictionary.ReloadAsync();
+            return null;
         });
         b.RegisterAsync("dictionary.saveRule", async p =>
         {
@@ -488,6 +520,50 @@ public sealed class AppHost : IAsyncDisposable
             Quit();
             return null;
         });
+        b.RegisterAsync("models.checkUpdates", async p =>
+        {
+            var tier = Enum.TryParse<PerformanceTier>(p.Str("tier"), true, out var t) ? t : Tier;
+            try
+            {
+                var r = await _models.CheckForUpdatesAsync(_settings.Current.ModelsManifestUrl, tier, CancellationToken.None);
+                return new { ok = true, r.Available, r.CurrentVersion, r.RemoteVersion, r.RemoteDate, newModels = r.NewModels, message = (string?)null };
+            }
+            catch (Exception ex)
+            {
+                _log.Information("Modellliste nicht erreichbar: {Msg}", ex.Message);
+                return new { ok = false, Available = false, CurrentVersion = 0, RemoteVersion = 0, RemoteDate = "", newModels = (IReadOnlyList<ModelManager.ModelUpdate>)Array.Empty<ModelManager.ModelUpdate>(),
+                    message = (string?)"Die Modellliste ist gerade nicht erreichbar. HILDE arbeitet mit den vorhandenen Modellen weiter." };
+            }
+        });
+        b.Register("models.applyUpdate", p =>
+        {
+            if (_downloadCts != null) return new { started = false };
+            _models.ApplyPendingManifest();
+            var tier = Enum.TryParse<PerformanceTier>(p.Str("tier"), true, out var t) ? t : Tier;
+            bool llm = !_settings.Current.LlmSkipped || p.Bool("includeLlm");
+            var cts = _downloadCts = new CancellationTokenSource();
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await _models.DownloadAsync(tier, llm, cts.Token);
+                    // Neue Modelle laufen erst nach Neustart der Engines; alte erst danach löschen
+                    await _speechClient.StopAsync();
+                    await _llmClient.StopAsync();
+                    int removed = _models.RemoveSuperseded();
+                    _bridge.Emit("modelsDone", new { ok = true, removed });
+                }
+                catch (OperationCanceledException) { _bridge.Emit("modelsDone", new { ok = false, cancelled = true, message = "Pausiert – Fortsetzen jederzeit möglich." }); }
+                catch (HildeException ex) { _bridge.Emit("modelsDone", new { ok = false, errorId = ex.Error.Id, message = ex.Error.Message }); }
+                catch (Exception ex)
+                {
+                    _log.Error(ex, "Modell-Aktualisierung");
+                    _bridge.Emit("modelsDone", new { ok = false, errorId = HildeErrors.DownloadFailed.Id, message = HildeErrors.DownloadFailed.Message });
+                }
+                finally { _downloadCts = null; }
+            });
+            return new { started = true };
+        });
         b.Register("models.cancel", _ => { _downloadCts?.Cancel(); return null; });
         b.RegisterAsync("models.import", async p =>
         {
@@ -565,6 +641,28 @@ public sealed class AppHost : IAsyncDisposable
             if (_testDir != null) { _audio.Cancel(); TryDeleteDir(_testDir); _testDir = null; }
             return null;
         });
+    }
+
+    /// <summary>Behaltenes Audio nach der eingestellten Anzahl Tage löschen.</summary>
+    private async Task CleanupOldAudioAsync()
+    {
+        try
+        {
+            int days = _settings.Current.Archive.AudioRetentionDays;
+            if (days <= 0) return;
+            var cutoff = DateTime.UtcNow.AddDays(-days);
+            int n = 0;
+            foreach (var r in await _repo.ListAsync(new TranscriptQuery(null, null, 100000)))
+            {
+                if (r.AudioPath == null || r.CreatedUtc > cutoff) continue;
+                TryDeleteDir(_paths.RecordingDir(r.Id));
+                r.AudioPath = null;
+                await _repo.SaveAsync(r);
+                n++;
+            }
+            if (n > 0) _log.Information("{Count} Audiodateien nach {Days} Tagen gelöscht", n, days);
+        }
+        catch (Exception ex) { _log.Warning(ex, "Audio-Aufräumen"); }
     }
 
     private static string Preview(string text) => text.Length <= 180 ? text : text[..180].TrimEnd() + " …";

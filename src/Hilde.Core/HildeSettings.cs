@@ -25,6 +25,11 @@ public sealed class HildeSettings
     public bool LivePreview { get; set; } = true;
     /// <summary>Eigener Modellordner (null = %LOCALAPPDATA%\HILDE\Models).</summary>
     public string? ModelsDirectory { get; set; }
+    /// <summary>Wo HILDE auf Knopfdruck nach neuen, geprüften Modellen sucht.</summary>
+    public string ModelsManifestUrl { get; set; } = "https://wetzel-web.de/hilde/modelle.json";
+    /// <summary>„neuer Absatz“, „neue Zeile“, „Doppelpunkt“.</summary>
+    public bool DictationCommands { get; set; } = true;
+    public FormatSettings Format { get; set; } = new();
     public int ModelIdleUnloadMinutes { get; set; } = 5;
     public bool Autostart { get; set; }
     /// <summary>"system", "light", "dark".</summary>
@@ -49,6 +54,16 @@ public sealed class HotkeySettings
     /// <summary>Kürzer gehalten = Tipp (keine Aufnahme).</summary>
     public int MinHoldMs { get; set; } = 250;
     public bool EscapeCancels { get; set; } = true;
+}
+
+public sealed class FormatSettings
+{
+    public bool Amounts { get; set; } = true;
+    public bool Dates { get; set; } = true;
+    public bool Times { get; set; } = true;
+    public bool Codes { get; set; } = true;
+    public bool Percent { get; set; } = true;
+    public FormatOptions ToOptions() => new(Amounts, Dates, Times, Codes, Percent);
 }
 
 public sealed class InsertionSettings
@@ -82,4 +97,6 @@ public sealed class ArchiveSettings
     public bool Enabled { get; set; } = true;
     /// <summary>Audio nach erfolgreicher Verarbeitung behalten.</summary>
     public bool KeepAudio { get; set; }
+    /// <summary>Behaltenes Audio nach so vielen Tagen löschen (0 = nie).</summary>
+    public int AudioRetentionDays { get; set; } = 14;
 }

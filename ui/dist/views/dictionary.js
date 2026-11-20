@@ -4,12 +4,14 @@ export function renderDictionary(root) {
     clear(root);
     const rulesBox = h('div', { class: 'card pad' });
     const termsBox = h('div', { class: 'card pad' });
-    root.append(h('header', { class: 'view-head' }, h('div', null, h('h1', null, 'Wörterbuch'), h('p', { class: 'muted' }, 'Ersetzungen gelten exakt und vor sowie nach der KI-Bereinigung. Fachbegriffe helfen der Spracherkennung und bleiben unverändert.'))), h('div', { class: 'grid2' }, rulesBox, termsBox));
+    const snippetsBox = h('div', { class: 'card pad span2' });
+    root.append(h('header', { class: 'view-head' }, h('div', null, h('h1', null, 'Wörterbuch'), h('p', { class: 'muted' }, 'Ersetzungen gelten exakt und vor sowie nach der KI-Bereinigung. Fachbegriffe helfen der Spracherkennung und bleiben unverändert.'))), h('div', { class: 'grid2' }, rulesBox, termsBox, snippetsBox));
     async function load() {
         try {
-            const { rules, terms } = await call('dictionary.get');
+            const { rules, terms, snippets } = await call('dictionary.get');
             drawRules(rules);
             drawTerms(terms);
+            drawSnippets(snippets);
         }
         catch (e) {
             toast(errorText(e), 'error');
@@ -80,6 +82,38 @@ export function renderDictionary(root) {
         overlay.classList.add('show');
         pattern.focus();
         refresh();
+    }
+    function drawSnippets(snippets) {
+        clear(snippetsBox);
+        snippetsBox.append(h('h2', null, 'Textbausteine'), h('p', { class: 'muted small' }, 'Sag beim Diktieren „Baustein“ und den Namen – z. B. „Baustein Gruß“ – und HILDE setzt den hinterlegten Text ein. Zeilenumbrüche bleiben erhalten.'), h('div', { class: 'snippets' }, snippets.length === 0 ? h('span', { class: 'muted' }, 'Noch keine Bausteine.') : null, snippets.map(s => h('div', { class: 'snippet' }, h('div', { class: 'snippet-head' }, h('strong', null, '„Baustein ' + s.name + '“'), h('span', { class: 'spacer' }), h('button', { class: 'btn small', onclick: () => editSnippet(s) }, 'Bearbeiten'), h('button', { class: 'btn small danger-ghost', 'aria-label': `Baustein ${s.name} löschen`, onclick: async () => {
+                if (!await confirmDialog('Baustein löschen?', s.name, 'Löschen', true))
+                    return;
+                await call('dictionary.deleteSnippet', { id: s.id });
+                load();
+            } }, '✕')), h('div', { class: 'snippet-text' }, s.text)))), h('button', { class: 'btn primary', onclick: () => editSnippet(null) }, '+ Neuer Baustein'));
+    }
+    function editSnippet(s) {
+        const overlay = document.getElementById('overlay');
+        const name = h('input', { class: 'input', value: s?.name ?? '', placeholder: 'z. B. Gruß Kunde' });
+        const text = h('textarea', { class: 'textarea', placeholder: 'Text, der eingefügt werden soll …' });
+        text.value = s?.text ?? '';
+        const close = () => { dlg.remove(); overlay.classList.remove('show'); };
+        const dlg = h('div', { class: 'dialog wide', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Textbaustein' }, h('h2', null, s ? 'Baustein bearbeiten' : 'Neuer Baustein'), h('label', { class: 'field' }, h('span', null, 'Name (wird gesprochen: „Baustein …“)'), name), h('label', { class: 'field' }, h('span', null, 'Text'), text), h('div', { class: 'row end' }, h('button', { class: 'btn', onclick: close }, 'Abbrechen'), h('button', { class: 'btn primary', onclick: async () => {
+                try {
+                    await call('dictionary.saveSnippet', { id: s?.id ?? 0, name: name.value, text: text.value });
+                    close();
+                    toast('Gespeichert', 'ok');
+                    load();
+                }
+                catch (e) {
+                    toast(errorText(e), 'error');
+                }
+            } }, 'Speichern')));
+        dlg.addEventListener('keydown', e => { if (e.key === 'Escape')
+            close(); });
+        overlay.append(dlg);
+        overlay.classList.add('show');
+        name.focus();
     }
     function drawTerms(terms) {
         clear(termsBox);

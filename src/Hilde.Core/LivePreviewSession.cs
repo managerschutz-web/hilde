@@ -25,6 +25,8 @@ public sealed class LivePreviewSession
     private int _counter;
 
     public int CommittedSamples { get; private set; }
+    private readonly List<TimedSegment> _segments = new();
+    public IReadOnlyList<TimedSegment> CommittedSegments => _segments;
     public string CommittedText => _committed.ToString().Trim();
     public bool Failed { get; private set; }
 
@@ -65,8 +67,10 @@ public sealed class LivePreviewSession
                 int? cut = FindCut(total);
                 if (cut is int c && c > CommittedSamples)
                 {
-                    var text = await TranscribeAsync(CommittedSamples, c).ConfigureAwait(false);
+                    var (text, segs) = await TranscribeWithSegmentsAsync(CommittedSamples, c).ConfigureAwait(false);
                     if (_abandoned) return;
+                    var offset = TimeSpan.FromSeconds(CommittedSamples / (double)Rate);
+                    _segments.AddRange(segs.Select(x => x with { Start = x.Start + offset, End = x.End + offset }));
                     if (text.Length > 0) _committed.Append(' ').Append(text);
                     CommittedSamples = c;
                     provisional = "";
@@ -91,10 +95,12 @@ public sealed class LivePreviewSession
         }
     }
 
-    private async Task<string> TranscribeAsync(int from, int to)
+    private async Task<string> TranscribeAsync(int from, int to) => (await TranscribeWithSegmentsAsync(from, to).ConfigureAwait(false)).Text;
+
+    private async Task<(string Text, IReadOnlyList<TimedSegment> Segments)> TranscribeWithSegmentsAsync(int from, int to)
     {
         var samples = _audio.CopyLiveSamples(from, to - from);
-        if (!HasEnergy(samples)) return "";
+        if (!HasEnergy(samples)) return ("", []);
         var path = Path.Combine(_dir, $"live-{Interlocked.Increment(ref _counter)}.wav");
         WavIO.WriteMono16k(path, samples);
         try
@@ -103,7 +109,7 @@ public sealed class LivePreviewSession
             var r = await _speech.TranscribeAsync(
                 new SpeechRequest(path, _language, BuildPrompt(_basePrompt, CommittedText), Fast: true, Background: true), cts.Token)
                 .ConfigureAwait(false);
-            return HallucinationFilter.Clean(r.Text);
+            return (HallucinationFilter.Clean(r.Text), r.Segments);
         }
         finally
         {

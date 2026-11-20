@@ -282,6 +282,7 @@ public sealed class DictationController : IAsyncDisposable
 
         // 1) Spracherkennung (isolierter Prozess, mit Timeout) – Vorarbeit der Live-Vorschau übernehmen
         SpeechResult speech;
+        List<TimedSegment> segments = [];
         string? prefix = null;
         string asrPath = job.Audio.WavPath;
         var asrDuration = job.Audio.Duration;
@@ -318,7 +319,13 @@ public sealed class DictationController : IAsyncDisposable
                         .ConfigureAwait(false);
                 }
                 if (prefix != null)
+                {
+                    var offset = TimeSpan.FromSeconds(job.Preview!.CommittedSamples / (double)WavIO.SampleRate);
+                    segments = job.Preview.CommittedSegments
+                        .Concat(speech.Segments.Select(x => x with { Start = x.Start + offset, End = x.End + offset })).ToList();
                     speech = speech with { Text = (prefix + " " + HallucinationFilter.Clean(speech.Text)).Trim() };
+                }
+                else segments = speech.Segments.ToList();
             }
             catch (Exception ex)
             {
@@ -344,23 +351,28 @@ public sealed class DictationController : IAsyncDisposable
         }
         record.RawText = raw;
         record.Language = speech.DetectedLanguage;
+        record.SegmentsJson = SegmentsToJson(segments);
         await SafeSaveAsync(record).ConfigureAwait(false);   // Rohtext ist ab hier sicher
 
-        // 2) Wörterbuch + KI-/Regelbereinigung
+        // 2) Diktierbefehle + Textbausteine (als Platzhalter geschützt), Wörterbuch, KI-/Regelbereinigung, Formatierung
+        var work = s.DictationCommands ? TextFormatter.EncodeCommands(raw) : raw;
+        var (encoded, snippetMap) = TextFormatter.EncodeSnippets(work, _dictionary.Snippets);
         string clean;
         if (s.TextMode == TextMode.Original)
         {
-            clean = raw;
+            clean = encoded;
         }
         else
         {
-            var pre = _dictionary.Apply(raw);
+            var pre = _dictionary.Apply(encoded);
+            var protectedTerms = _dictionary.ProtectedTerms.Concat(TextFormatter.Placeholders(pre)).Distinct().ToList();
             var tr = await _text.ProcessAsync(
-                new TextRequest(pre, s.TextMode, speech.DetectedLanguage, _dictionary.ProtectedTerms), _cts.Token)
+                new TextRequest(pre, s.TextMode, speech.DetectedLanguage, protectedTerms), _cts.Token)
                 .ConfigureAwait(false);
-            clean = _dictionary.Apply(tr.Text);
+            clean = TextFormatter.FormatNumbers(_dictionary.Apply(tr.Text), s.Format.ToOptions());
             record.FallbackReason = tr.FallbackReason;
         }
+        clean = TextFormatter.DecodeCommands(TextFormatter.DecodeSnippets(clean, snippetMap));
         record.CleanText = clean;
         record.FinalText = clean;
         await SafeSaveAsync(record).ConfigureAwait(false);
@@ -499,6 +511,10 @@ public sealed class DictationController : IAsyncDisposable
             _log.Error(ex, "{ErrorId} beim Speichern von {Id}", HildeErrors.StorageFailed.Id, record.Id);
         }
     }
+
+    private static string? SegmentsToJson(IReadOnlyList<TimedSegment> segments) =>
+        segments.Count == 0 ? null : System.Text.Json.JsonSerializer.Serialize(
+            segments.Select(x => new { s = Math.Round(x.Start.TotalSeconds, 2), e = Math.Round(x.End.TotalSeconds, 2), t = x.Text }));
 
     private static string BuildTitle(DateTime utc, string? app)
     {

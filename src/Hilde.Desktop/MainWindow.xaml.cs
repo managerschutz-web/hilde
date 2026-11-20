@@ -10,6 +10,7 @@ namespace Hilde.Desktop;
 public partial class MainWindow : Window
 {
     public const string Host = "app.hilde.example"; // reservierte Domain, verlässt nie den Rechner
+    public const string AudioHost = "audio.hilde.example"; // lokale Aufnahmen für die Wiedergabe im Archiv
     private readonly HildePaths _paths;
     private readonly UiBridge _bridge;
     private bool _allowClose;
@@ -31,6 +32,8 @@ public partial class MainWindow : Window
             var core = Web.CoreWebView2;
             var uiDir = Path.Combine(AppContext.BaseDirectory, "ui");
             core.SetVirtualHostNameToFolderMapping(Host, uiDir, CoreWebView2HostResourceAccessKind.Deny);
+            Directory.CreateDirectory(_paths.Recordings);
+            core.SetVirtualHostNameToFolderMapping(AudioHost, _paths.Recordings, CoreWebView2HostResourceAccessKind.DenyCors);
             core.Settings.IsStatusBarEnabled = false;
             core.Settings.IsZoomControlEnabled = true;
             core.Settings.AreBrowserAcceleratorKeysEnabled = true;

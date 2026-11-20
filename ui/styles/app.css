@@ -69,6 +69,7 @@ kbd { background: var(--surface); border: 1px solid var(--border); border-bottom
 .rail-foot { margin-top: auto; padding: 8px; font-size: 12px; color: var(--muted); }
 .rail-foot .hint { padding: 8px 10px; border-radius: 8px; background: var(--accent-soft); color: var(--accent-strong); margin-bottom: 10px; }
 .made { opacity: .8; }
+.btn.quit { width: 100%; margin-bottom: 10px; font-size: 13px; }
 
 .view { overflow: auto; padding: 26px 32px 32px; outline: none; min-width: 0; }
 .view-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 24px; margin-bottom: 18px; }

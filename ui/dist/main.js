@@ -1,5 +1,5 @@
 import { initBridge, call, on } from './bridge.js';
-import { toast, errorText } from './components/dom.js';
+import { toast, errorText, confirmDialog } from './components/dom.js';
 import { renderDictations } from './views/dictations.js';
 import { renderDictionary } from './views/dictionary.js';
 import { renderSettings, applyTheme } from './views/settings.js';
@@ -47,6 +47,11 @@ async function start() {
         const next = items[(i + (ke.key === 'ArrowDown' ? 1 : items.length - 1)) % items.length];
         next.focus();
         ke.preventDefault();
+    });
+    document.getElementById('quitBtn').addEventListener('click', async () => {
+        if (await confirmDialog('HILDE beenden?', 'Die Diktiertaste ist danach nicht mehr aktiv, bis HILDE neu gestartet wird.', 'Beenden')) {
+            call('app.quit').catch(() => { });
+        }
     });
     const statusLine = document.getElementById('statusLine');
     on('status', (s) => {

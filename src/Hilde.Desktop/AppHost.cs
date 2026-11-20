@@ -133,6 +133,14 @@ public sealed class AppHost : IAsyncDisposable
         _pill = new PillWindow { Topmost = s.Pill.Topmost, Opacity = s.Pill.Opacity };
         _pill.MicClicked += () => _controller.ToggleHandsFree();
         _pill.ExpandClicked += ShowMainWindow;
+        _pill.QuitRequested += Quit;
+        _pill.HideRequested += () =>
+        {
+            var c = _settings.Current.Clone();
+            c.Pill.Visible = false;
+            _settings.Save(c);
+            _tray?.Notify("HILDE", "Die Pill ist ausgeblendet. Einblenden über das HILDE-Symbol im Infobereich.");
+        };
         _pill.PositionChanged += (l, t) =>
         {
             var c = _settings.Current.Clone();
@@ -159,7 +167,7 @@ public sealed class AppHost : IAsyncDisposable
             c.Pill.Visible = !c.Pill.Visible;
             _settings.Save(c);
         };
-        _tray.ExitRequested += () => _ui.InvokeAsync(() => Application.Current.Shutdown(0));
+        _tray.ExitRequested += Quit;
     }
 
     private void ApplySettings(HildeSettings s)
@@ -208,6 +216,9 @@ public sealed class AppHost : IAsyncDisposable
         });
     }
 
+    /// <summary>HILDE vollständig beenden (Engines werden mit beendet).</summary>
+    public void Quit() => _ui.InvokeAsync(() => Application.Current.Shutdown(0));
+
     public void ShowMainWindow()
     {
         if (_main == null)
@@ -232,6 +243,7 @@ public sealed class AppHost : IAsyncDisposable
             hotkey = _settings.Current.Hotkey.DisplayName,
             state = _controller.State,
         });
+        b.Register("app.quit", _ => { Quit(); return null; });
         b.Register("app.openLogs", _ => { OpenFolder(_paths.Logs); return null; });
         b.Register("app.openData", _ => { OpenFolder(_paths.Root); return null; });
         b.Register("app.licenses", _ => ReadLicenses());

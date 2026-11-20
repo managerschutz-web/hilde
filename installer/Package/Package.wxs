@@ -17,6 +17,7 @@
       </Directory>
     </StandardDirectory>
     <StandardDirectory Id="ProgramMenuFolder" />
+    <StandardDirectory Id="DesktopFolder" />
 
     <!-- Alle veröffentlichten Dateien (App + isolierter Engine-Prozess + UI + Manifest + Lizenzen) -->
     <ComponentGroup Id="AppFiles" Directory="INSTALLFOLDER">
@@ -25,6 +26,8 @@
 
     <Component Id="Shortcuts" Directory="ProgramMenuFolder" Guid="{0E4D7F2B-1E5B-4D8A-9B0B-7C1A8F9E2D31}">
       <Shortcut Id="StartMenuShortcut" Name="HILDE" Description="Taste drücken. Sprechen. Loslassen."
+                Target="[INSTALLFOLDER]HILDE.exe" WorkingDirectory="INSTALLFOLDER" Icon="hilde.ico" />
+      <Shortcut Id="DesktopShortcut" Directory="DesktopFolder" Name="HILDE" Description="Taste drücken. Sprechen. Loslassen."
                 Target="[INSTALLFOLDER]HILDE.exe" WorkingDirectory="INSTALLFOLDER" Icon="hilde.ico" />
       <RemoveFolder Id="RemoveInstallFolder" Directory="INSTALLFOLDER" On="uninstall" />
       <RemoveFolder Id="RemoveProgramsFolder" Directory="ProgramsFolder" On="uninstall" />

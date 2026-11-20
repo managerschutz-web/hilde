@@ -39,6 +39,8 @@ public partial class PillWindow : Window
     public event Action? MicClicked;
     public event Action? ExpandClicked;
     public event Action<double, double>? PositionChanged;
+    public event Action? HideRequested;
+    public event Action? QuitRequested;
 
     public PillWindow()
     {
@@ -149,6 +151,10 @@ public partial class PillWindow : Window
     private void OnButtonDown(object sender, MouseButtonEventArgs e) => e.Handled = true; // kein Ziehen über Schaltflächen
 
     private void OnMicClick(object sender, MouseButtonEventArgs e) { e.Handled = true; MicClicked?.Invoke(); }
+
+    private void OnMenuOpen(object sender, RoutedEventArgs e) => ExpandClicked?.Invoke();
+    private void OnMenuHide(object sender, RoutedEventArgs e) => HideRequested?.Invoke();
+    private void OnMenuQuit(object sender, RoutedEventArgs e) => QuitRequested?.Invoke();
 
     private void OnExpandClick(object sender, MouseButtonEventArgs e) { e.Handled = true; ExpandClicked?.Invoke(); }
 }

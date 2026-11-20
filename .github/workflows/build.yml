@@ -71,6 +71,18 @@ jobs:
           if (-not (Test-Path artifacts/app/Hilde.Engine.exe)) { throw "Hilde.Engine.exe fehlt" }
           if (-not (Test-Path artifacts/app/ui/dist/main.js)) { throw "Oberfläche fehlt" }
           Get-ChildItem artifacts/app -Recurse -Include *.pdb | Remove-Item
+          # ONNX Runtime: neueste Version verwenden (abwärtskompatibel für sherpa-onnx, nötig für Silero VAD)
+          Copy-Item "$env:USERPROFILE\.nuget\packages\microsoft.ml.onnxruntime\1.22.0\runtimes\win-x64\native\onnxruntime.dll" artifacts/app -Force
+          # Diagnose: Aufbau des Vulkan-Pakets
+          Write-Host "LLamaSharp.Backend.Vulkan:"
+          Get-ChildItem "$env:USERPROFILE\.nuget\packages\llamasharp.backend.vulkan" -Recurse -File | ForEach-Object { $_.FullName }
+          # Visual-C++-Laufzeit app-lokal mitliefern (Vulkan-Builds von llama.cpp benötigen sie)
+          $crt = Get-ChildItem "${env:ProgramFiles}\Microsoft Visual Studio\2022\*\VC\Redist\MSVC\*\x64\Microsoft.VC143.CRT" -Directory -ErrorAction SilentlyContinue | Select-Object -Last 1
+          if ($crt) {
+            Write-Host "CRT aus $($crt.FullName)"
+            $targets = @("artifacts/app") + (Get-ChildItem artifacts/app/runtimes -Recurse -Directory | Where-Object { Test-Path (Join-Path $_.FullName 'llama.dll') } | ForEach-Object FullName)
+            foreach ($t in $targets) { Copy-Item "$($crt.FullName)\*.dll" $t -Force }
+          } else { Write-Host "::warning::VC++-Laufzeit nicht gefunden" }
           Write-Host "Native Laufzeiten:"
           Get-ChildItem artifacts/app -Recurse -Include sherpa*.dll,onnxruntime*.dll,whisper.dll,llama.dll | ForEach-Object { $_.FullName.Replace((Resolve-Path artifacts/app).Path, '') + "  " + $_.VersionInfo.FileVersion }
           if (-not (Get-ChildItem artifacts/app -Recurse -Filter sherpa-onnx-c-api.dll)) { throw "sherpa-onnx fehlt (Vorlesen)" }

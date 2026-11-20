@@ -112,6 +112,19 @@ jobs:
           name: test-results
           path: artifacts/test-results/
 
+      - name: Interne Version unter „Releases“ bereitstellen (auch vom Handy ladbar)
+        if: github.ref == 'refs/heads/main'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $v = "${{ steps.ver.outputs.version }}"
+          Copy-Item artifacts/release/HILDE-Setup-$v.exe artifacts/release/HILDE-Setup.exe
+          gh release delete intern --yes --cleanup-tag 2>$null
+          $notes = "Interner Build $v vom $(Get-Date -Format 'dd.MM.yyyy HH:mm') UTC – nicht zur Weitergabe.`n`nSHA-256:`n" + (Get-Content artifacts/release/SHA256SUMS.txt -Raw)
+          gh release create intern artifacts/release/HILDE-Setup.exe artifacts/release/SHA256SUMS.txt `
+            --title "HILDE intern $v" --notes $notes --prerelease --target ${{ github.sha }}
+
       - name: Interne Vorab-Version auf GitHub (Entwurf)
         if: steps.ver.outputs.release == 'true'
         uses: softprops/action-gh-release@v2

@@ -77,6 +77,10 @@ public sealed class LowLevelKeyboardHook : IDisposable
     public Func<int>? ReadKey { get; set; }
     public event Action? ReadKeyPressed;
 
+    /// <summary>Nur während der Ablage am Mauszeiger: Enter/Esc abfangen (true = Taste nicht weiterreichen).</summary>
+    public Func<int, bool>? Interceptor { get; set; }
+    private int _swallowedVk = -1;
+
     public LowLevelKeyboardHook(GestureRecognizer gestures, Action<GestureAction> dispatch,
         Func<int> triggerKey, Func<bool> escapeEnabled, ILogger log)
     {
@@ -147,6 +151,12 @@ public sealed class LowLevelKeyboardHook : IDisposable
                 return CallNextHookEx(IntPtr.Zero, nCode, wParam, lParam);
             }
             if (_paused) return CallNextHookEx(IntPtr.Zero, nCode, wParam, lParam);
+
+            if (Interceptor is { } intercept && vk != _triggerKey())
+            {
+                if (down && intercept(vk)) { _swallowedVk = vk; return (IntPtr)1; }
+                if (up && vk == _swallowedVk) { _swallowedVk = -1; return (IntPtr)1; }
+            }
 
             if (ReadKey != null && vk == ReadKey() && vk != _triggerKey())
             {

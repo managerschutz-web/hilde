@@ -109,6 +109,8 @@ export function renderSettings(root: HTMLElement): () => void {
             toggle('Prozent', s.format.percent, v => s.format.percent = v, '„5 Prozent“ → 5 %'),
             toggle('IBAN und Kennzeichen', s.format.codes, v => s.format.codes = v, 'IBAN in Viererblöcken, „Kennzeichen IGB AB 123“ → IGB-AB 123')),
           section('Einfügen',
+            select('Nach dem Diktat', s.insertion.flow ?? 'Auto', [['Auto', 'Halten = direkt einfügen, Doppeltippen = Diktierfenster'], ['Direct', 'Immer direkt einfügen'], ['Editor', 'Immer im Diktierfenster bearbeiten']], v => s.insertion.flow = v,
+              'Im Diktierfenster siehst du den Text live, kannst ihn ändern, kürzen oder sachlich fassen lassen. „Einfügen ↗“ hängt ihn an den Mauszeiger – klick dorthin, wo er hin soll.'),
             select('Methode', s.insertion.method, [['Auto', 'Automatisch (Zwischenablage + Einfügen)'], ['Clipboard', 'Immer Zwischenablage'], ['Typing', 'Zeichenweise tippen (ohne Zwischenablage)']], v => s.insertion.method = v),
             toggle('Zwischenablage danach wiederherstellen', s.insertion.restoreClipboard, v => s.insertion.restoreClipboard = v,
               'Nur wenn sie in der Zwischenzeit unverändert blieb. Diktate erscheinen nicht im Windows-Zwischenablageverlauf.'),

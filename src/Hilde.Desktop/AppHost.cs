@@ -38,6 +38,10 @@ public sealed class AppHost : IAsyncDisposable
     private LowLevelKeyboardHook? _hook;
     private readonly UiBridge _bridge = new();
     private PillWindow? _pill;
+    private EditorWindow? _editor;
+    private CursorPlacement _placement = null!;
+    private volatile bool _editorOpen;
+    private bool _editorSession;
     private MainWindow? _main;
     private TrayIcon? _tray;
     private CancellationTokenSource? _downloadCts;
@@ -95,9 +99,21 @@ public sealed class AppHost : IAsyncDisposable
         _controller = new DictationController(_audio, _vad, _speech, _text, _dictionary, _insertion, _repo,
             _settings, _paths, Log.Logger);
         _controller.StatusChanged += OnStatus;
+        _controller.EditorRoute = UseEditorFor;
+        _controller.EditorTextReady += (r, target) => _ui.InvokeAsync(() =>
+        {
+            if (_editor == null) return;
+            _editorSession = true;
+            _editor.Open(activate: true);
+            _editor.AppendDictation(r.FinalText, target, r.Id);
+        });
         _controller.LevelChanged += (_, l) =>
         {
-            _ui.InvokeAsync(() => _pill?.SetLevel(l), DispatcherPriority.Render);
+            _ui.InvokeAsync(() =>
+            {
+                if (_editorSession) _editor?.SetLevel(l);
+                else _pill?.SetLevel(l);
+            }, DispatcherPriority.Render);
             _bridge.Emit("level", l);
         };
         _controller.CopyFallbackRequested += (_, e) => _ui.InvokeAsync(() =>
@@ -107,7 +123,11 @@ public sealed class AppHost : IAsyncDisposable
             w.Activate();
         });
         _controller.Completed += (_, r) => _bridge.Emit("transcript", new { r.Id });
-        _controller.PreviewChanged += (f, pv) => _ui.InvokeAsync(() => _pill?.SetPreview(f, pv));
+        _controller.PreviewChanged += (f, pv) => _ui.InvokeAsync(() =>
+        {
+            if (_editorSession) { _editor?.SetPreview(f, pv); _pill?.SetPreview("", ""); }
+            else _pill?.SetPreview(f, pv);
+        });
 
         RegisterBridge();
         CreateUi();
@@ -200,6 +220,24 @@ public sealed class AppHost : IAsyncDisposable
             if (s.Pill.Left == null) _pill.PlaceDefault(); else _pill.EnsureOnScreen();
         }
 
+        _placement = new CursorPlacement(_ui, Log.Logger);
+        _editor = new EditorWindow { HotkeyName = s.Hotkey.DisplayName };
+        _editor.ApplyAccent(s.Pill.AccentColor);
+        _editor.IsVisibleChanged += (_, _) => _editorOpen = _editor.IsVisible;
+        _editor.Rewrite = async (text, kind, ct) =>
+        {
+            var res = await _text.RewriteAsync(text, kind, _dictionary.ProtectedTerms, ct);
+            return (_dictionary.Apply(res.Text), res.Notes.Count > 0 ? string.Join(" · ", res.Notes) : null);
+        };
+        _editor.DictateClicked += () => _controller.ToggleHandsFree();
+        _editor.Discarded += () =>
+        {
+            _editorSession = false;
+            _controller.CancelRecording();
+        };
+        _editor.InsertAtCursorRequested += text => _ = PlaceFromEditorAsync(text);
+        _editor.InsertToOriginRequested += (text, origin) => _ = InsertFromEditorAsync(text, origin, _editor.RecordIds.ToList());
+
         _tray = new TrayIcon();
         _tray.SetPillVisible(s.Pill.Visible);
         _tray.OpenRequested += () => _ui.InvokeAsync(ShowMainWindow);
@@ -221,6 +259,7 @@ public sealed class AppHost : IAsyncDisposable
             _pill.Topmost = s.Pill.Topmost;
             _pill.Opacity = s.Pill.Opacity;
             _pill.ApplyColors(s.Pill.BackgroundColor, s.Pill.AccentColor);
+            if (_editor != null) { _editor.ApplyAccent(s.Pill.AccentColor); _editor.HotkeyName = s.Hotkey.DisplayName; }
             if (s.Pill.Visible && !_pill.IsVisible) { _pill.Show(); _pill.EnsureOnScreen(); }
             if (!s.Pill.Visible && _pill.IsVisible) _pill.Hide();
         }
@@ -241,11 +280,106 @@ public sealed class AppHost : IAsyncDisposable
     {
         _ui.InvokeAsync(() =>
         {
+            if (e.State is HildeState.Recording or HildeState.Paused)
+            {
+                if (!_editorSession && UseEditorFor(e.Mode ?? RecordingMode.PushToTalk))
+                {
+                    _editorSession = true;
+                    _pill?.SetPreview("", "");
+                    if (_editor is { IsVisible: false }) _ = OpenEditorSoonAsync();
+                }
+            }
+            else if (e.State == HildeState.Ready && _editor is { IsVisible: false }) _editorSession = false;
+            if (_editorSession || _editor?.IsVisible == true) _editor?.SetStatus(e);
             _pill?.SetStatus(e);
             _tray?.SetStatus(e.Message ?? e.State.ToString(), e.State is HildeState.Recording or HildeState.Paused);
         });
         _bridge.Emit("status", e);
         if (e.State == HildeState.Recording) ScheduleWarmUp();
+    }
+
+    /// <summary>Halten = direkt, Doppeltippen/Freihand = Diktierfenster (einstellbar). Offenes Fenster nimmt alles auf.</summary>
+    private bool UseEditorFor(RecordingMode mode) => _editorOpen || _settings.Current.Insertion.Flow switch
+    {
+        DictationFlow.Editor => true,
+        DictationFlow.Direct => false,
+        _ => mode == RecordingMode.HandsFree
+    };
+
+    /// <summary>Kurz warten – ein bloßes Antippen der Taste soll kein Fenster aufblitzen lassen.</summary>
+    private async Task OpenEditorSoonAsync()
+    {
+        await Task.Delay(300);
+        if (_editor == null || _editor.IsVisible || !_editorSession) return;
+        if (_controller.State is not (HildeState.Recording or HildeState.Paused)) return;
+        _editor.SetStatus(new StatusEventArgs(_controller.State));
+        _editor.Open(activate: true);
+    }
+
+    /// <summary>Text hängt am Mauszeiger, Klick ins Zielfeld fügt ein.</summary>
+    private async Task PlaceFromEditorAsync(string text)
+    {
+        if (_editor == null || _placement.Active) return;
+        if (_controller.State is HildeState.Recording or HildeState.Paused)
+        {
+            _editor.ShowNotice("Bitte zuerst das laufende Diktat beenden.");
+            return;
+        }
+        var ids = _editor.RecordIds.ToList();
+        _editor.Hide();
+        var result = await _placement.RunAsync(text, _hook, TimeSpan.FromSeconds(90));
+        if (result == PlacementResult.Cancel)
+        {
+            _editor.Open(activate: true);
+            return;
+        }
+        if (result == PlacementResult.Click) await Task.Delay(180); // Zielprogramm setzt erst den Cursor
+        var target = _insertion.CaptureTarget();
+        await InsertFromEditorAsync(text, target, ids);
+    }
+
+    private async Task InsertFromEditorAsync(string text, InsertionTarget target, List<string> ids)
+    {
+        if (_editor == null) return;
+        _editor.Hide();
+        InsertionOutcome outcome;
+        try
+        {
+            outcome = await Task.Run(() => _insertion.InsertAsync(target, text, CancellationToken.None));
+        }
+        catch (Exception ex)
+        {
+            _log.Warning(ex, "Einfügen aus dem Diktierfenster fehlgeschlagen");
+            outcome = InsertionOutcome.Fail(HildeErrors.InsertFailed.Id);
+        }
+        if (!outcome.Success)
+        {
+            var err = HildeErrors.Get(outcome.ErrorId);
+            _log.Information("Einfügen aus dem Diktierfenster nicht möglich: {ErrorId} ({Detail}) Ziel {Target}",
+                err.Id, outcome.Detail ?? "-", target.Description);
+            _editor.Open(activate: true);
+            _editor.ShowNotice(err.Message + " Der Text ist noch hier – du kannst es erneut versuchen oder ihn kopieren.");
+            return;
+        }
+        _log.Information("Aus dem Diktierfenster eingefügt ({Method}, Ziel {Target})", outcome.Method, target.ProcessName ?? "–");
+        _editor.Reset();
+        _editorSession = false;
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                if (ids.Count != 1) return; // mehrere Diktate: Einzelteile bleiben unverändert im Archiv
+                var r = await _repo.GetAsync(ids[0]);
+                if (r == null) return;
+                r.FinalText = text;
+                r.TargetApp = target.ProcessName;
+                r.InsertionMethod = outcome.Method;
+                r.UpdatedUtc = DateTime.UtcNow;
+                await _repo.SaveAsync(r);
+                _bridge.Emit("transcript", new { r.Id });
+            }
+            catch (Exception ex) { _log.Debug(ex, "Archiv nach Diktierfenster"); }
+        });
     }
 
     /// <summary>Modelle laden, während noch gesprochen wird – erst nach 400 ms, damit Strg-Kürzel nichts auslösen.</summary>
@@ -754,6 +888,7 @@ public sealed class AppHost : IAsyncDisposable
         _tray?.Dispose();
         _tray = null;
         _pill?.Close();
+        _editor?.ForceClose();
         _main?.ForceClose();
     }
 

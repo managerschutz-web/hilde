@@ -25,6 +25,11 @@ internal static partial class Native
     [LibraryImport("advapi32.dll", SetLastError = true)] [return: MarshalAs(UnmanagedType.Bool)] public static partial bool OpenProcessToken(IntPtr process, uint access, out IntPtr token);
     [LibraryImport("advapi32.dll", SetLastError = true)] [return: MarshalAs(UnmanagedType.Bool)] public static partial bool GetTokenInformation(IntPtr token, int cls, out int info, int len, out int retLen);
     [LibraryImport("user32.dll")] public static partial int GetSystemMetrics(int index);
+    [LibraryImport("user32.dll")] public static partial IntPtr WindowFromPoint(POINT pt);
+    [LibraryImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] public static partial bool GetCursorPos(out POINT pt);
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct POINT { public int X, Y; }
 
     public const uint GA_ROOT = 2;
     public const int SM_REMOTESESSION = 0x1000;

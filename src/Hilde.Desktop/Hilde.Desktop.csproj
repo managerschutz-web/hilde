@@ -32,6 +32,7 @@
   <ItemGroup>
     <Resource Include="Assets\hilde.ico" />
     <Resource Include="Assets\splash.png" />
+    <Resource Include="Assets\avatar.png" />
     <!-- Oberfläche (HTML/CSS/kompiliertes TypeScript), Manifest und Lizenzen neben die EXE -->
     <Content Include="..\..\ui\index.html" Link="ui\index.html" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="..\..\ui\styles\**\*" LinkBase="ui\styles" CopyToOutputDirectory="PreserveNewest" />

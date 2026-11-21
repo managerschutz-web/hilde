@@ -25,7 +25,7 @@ public sealed class DictationController : IAsyncDisposable
     }
 
     private sealed record ProcessJob(RecordingContext Context, CapturedAudio Audio, bool Insert, string? Notice,
-        LivePreviewSession? Preview = null);
+        LivePreviewSession? Preview = null, bool ToEditor = false);
 
     private readonly IAudioCaptureService _audio;
     private readonly IVoiceActivityDetector _vad;
@@ -58,6 +58,10 @@ public sealed class DictationController : IAsyncDisposable
     public event EventHandler<TranscriptRecord>? Completed;
     /// <summary>Live-Text: (bereits fest erkannt, vorläufig). Leer = Vorschau ausblenden.</summary>
     public event Action<string, string>? PreviewChanged;
+    /// <summary>Fertiger Text für das Diktierfenster (statt direkt einzufügen) – mit dem Ziel beim Aufnahmestart.</summary>
+    public event Action<TranscriptRecord, InsertionTarget>? EditorTextReady;
+    /// <summary>Entscheidet beim Beenden der Aufnahme, ob der Text ins Diktierfenster geht.</summary>
+    public Func<RecordingMode, bool>? EditorRoute { get; set; }
 
     public HildeState State { get; private set; } = HildeState.Ready;
 
@@ -111,6 +115,14 @@ public sealed class DictationController : IAsyncDisposable
             SetState(HildeState.Paused, "Pausiert – zum Fortsetzen ⏵ klicken", mode: RecordingMode.HandsFree);
         }
         else SetState(HildeState.Recording, "Freihand – zum Beenden Taste erneut drücken", mode: RecordingMode.HandsFree);
+    }
+
+    /// <summary>Laufende Aufnahme von außen verwerfen (z. B. Diktierfenster geschlossen).</summary>
+    public void CancelRecording()
+    {
+        if (_current == null) return;
+        ResetGestures();
+        Post(GestureAction.Cancel);
     }
 
     /// <summary>Pill/Tray: Freihandaufnahme starten oder beenden.</summary>
@@ -219,9 +231,11 @@ public sealed class DictationController : IAsyncDisposable
             return;
         }
         ResetGestures();
+        bool toEditor = false;
+        try { toEditor = EditorRoute?.Invoke(ctx.Mode) == true; } catch (Exception ex) { _log.Debug(ex, "EditorRoute"); }
         Interlocked.Increment(ref _pendingJobs);
         SetState(HildeState.Processing, "Verarbeite …");
-        _jobs.Writer.TryWrite(new ProcessJob(ctx, audio, Insert: true, notice, preview));
+        _jobs.Writer.TryWrite(new ProcessJob(ctx, audio, Insert: !toEditor, notice, preview, toEditor));
     }
 
     private void ResetGestures() { lock (Gestures) Gestures.Reset(); }
@@ -261,6 +275,7 @@ public sealed class DictationController : IAsyncDisposable
             DurationMs = (long)job.Audio.Duration.TotalMilliseconds,
             AudioPath = job.Audio.WavPath,
             TargetApp = job.Insert ? ctx.Target.ProcessName : null,
+            InsertionMethod = job.ToEditor ? "editor" : null,
             Language = s.Language,
             Source = "Mikrofon",
             Title = BuildTitle(ctx.StartedUtc, ctx.Target.ProcessName)
@@ -404,17 +419,18 @@ public sealed class DictationController : IAsyncDisposable
                 doneMessage = "Bereit zum Kopieren";
             }
         }
-        else doneMessage = "Wiederhergestellt";
+        else doneMessage = job.ToEditor ? "Im Diktierfenster" : "Wiederhergestellt";
 
         // 4) Archiv
-        record.Status = job.Insert ? TranscriptStatus.Done : TranscriptStatus.Recovered;
+        bool live = job.Insert || job.ToEditor;
+        record.Status = live ? TranscriptStatus.Done : TranscriptStatus.Recovered;
         record.UpdatedUtc = DateTime.UtcNow;
         if (!s.Archive.KeepAudio)
         {
             TryDeleteDir(_paths.RecordingDir(ctx.Id));
             record.AudioPath = null;
         }
-        if (s.Archive.Enabled || !job.Insert) await SafeSaveAsync(record).ConfigureAwait(false);
+        if (s.Archive.Enabled || !live) await SafeSaveAsync(record).ConfigureAwait(false);
         else
         {
             try { await _repo.DeleteAsync(record.Id).ConfigureAwait(false); } catch (Exception ex) { _log.Warning(ex, "Löschen"); }
@@ -427,6 +443,7 @@ public sealed class DictationController : IAsyncDisposable
             sw.Elapsed.TotalSeconds, s.TextMode, record.InsertionMethod, record.FallbackReason ?? "-");
 
         PreviewChanged?.Invoke("", "");
+        if (job.ToEditor) EditorTextReady?.Invoke(record, ctx.Target);
         Completed?.Invoke(this, record);
         SetState(HildeState.Done, job.Notice ?? doneMessage);
         ScheduleReady();

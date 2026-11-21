@@ -72,6 +72,21 @@ public sealed class Win32TextInsertionService : ITextInsertionService
         };
     }
 
+    private static readonly string[] ShellClasses =
+        ["Shell_TrayWnd", "Shell_SecondaryTrayWnd", "NotifyIconOverflowWindow", "TopLevelWindowForOverflowXamlIsland",
+         "XamlExplorerHostIslandWindow", "Windows.UI.Core.CoreWindow", "Progman", "WorkerW", "MultitaskingViewFrame", "ForegroundStaging"];
+
+    /// <summary>Taskleiste, Startmenü, Desktop, Alt+Tab – dorthin wird nie eingefügt, Klicks dort dienen nur dem Wechseln.</summary>
+    public static bool IsShellWindow(IntPtr root) =>
+        root == IntPtr.Zero || ShellClasses.Contains(ClassName(root), StringComparer.OrdinalIgnoreCase);
+
+    public static bool IsOwnWindow(IntPtr root)
+    {
+        if (root == IntPtr.Zero) return false;
+        GetWindowThreadProcessId(root, out uint pid);
+        return pid == (uint)Environment.ProcessId;
+    }
+
     private static FieldInfo? InspectField(IntPtr focusHwnd)
     {
         try

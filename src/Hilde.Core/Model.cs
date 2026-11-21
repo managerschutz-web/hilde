@@ -43,6 +43,15 @@ public sealed record EngineHealth(bool Running, bool ModelLoaded, string? Backen
 
 public enum InsertionMethod { Auto, Clipboard, Typing }
 
+/// <summary>Was nach dem Diktat passiert: direkt einfügen oder im Diktierfenster bearbeiten.</summary>
+public enum DictationFlow
+{
+    /// <summary>Halten = direkt einfügen, Doppeltippen/Freihand = Diktierfenster.</summary>
+    Auto,
+    Direct,
+    Editor
+}
+
 public sealed record InsertionOutcome(bool Success, string Method, string? ErrorId, string? Detail)
 {
     public static InsertionOutcome Ok(string method) => new(true, method, null, null);

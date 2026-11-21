@@ -8,7 +8,7 @@
         <Image Source="pack://application:,,,/Assets/splash.png" Stretch="Uniform"
                RenderOptions.BitmapScalingMode="HighQuality"/>
         <!-- Version + Startfortschritt unten links -->
-        <StackPanel HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="52,0,0,26">
+        <StackPanel x:Name="Progress" HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="52,0,0,26">
             <Border Width="230" Height="3" CornerRadius="1.5" Background="#22FFFFFF" ClipToBounds="True"
                     HorizontalAlignment="Left">
                 <Border x:Name="Bar" Width="70" Height="3" CornerRadius="1.5" HorizontalAlignment="Left">
@@ -26,7 +26,7 @@
             <TextBlock x:Name="Info" Margin="0,8,0,0" FontSize="12" Foreground="#8597AD" Text="Startet …"/>
         </StackPanel>
         <Button x:Name="GoButton" Visibility="Collapsed" HorizontalAlignment="Left" VerticalAlignment="Bottom"
-                Margin="300,0,0,22" Padding="18,9" Cursor="Hand" Click="OnGo" IsDefault="True">
+                Margin="50,0,0,20" Padding="18,9" Cursor="Hand" Click="OnGo" IsDefault="True">
             <Button.Template>
                 <ControlTemplate TargetType="Button">
                     <Border x:Name="B" CornerRadius="20" Padding="{TemplateBinding Padding}">

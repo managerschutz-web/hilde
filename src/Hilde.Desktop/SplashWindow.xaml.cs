@@ -30,6 +30,9 @@ public partial class SplashWindow : Window
         Bar.Width = 230;
         var version = typeof(SplashWindow).Assembly.GetName().Version?.ToString(3) ?? "";
         Info.Text = $"Version {version} · startklar";
+        // Knopf ersetzt unten links den Fortschritt – „Made with ♥ in Ummaschumm“ bleibt frei
+        Progress.Visibility = Visibility.Collapsed;
+        GoButton.ToolTip = $"HILDE {version}";
         GoButton.Visibility = Visibility.Visible;
         Activate();
         GoButton.Focus();

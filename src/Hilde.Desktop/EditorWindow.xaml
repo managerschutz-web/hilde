@@ -1,0 +1,189 @@
+<Window x:Class="Hilde.Desktop.EditorWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="HILDE – Diktierfenster" Width="660" Height="440" MinWidth="500" MinHeight="300"
+        WindowStyle="None" AllowsTransparency="True" Background="Transparent" ResizeMode="CanResizeWithGrip"
+        Topmost="True" ShowInTaskbar="True" UseLayoutRounding="True"
+        Icon="pack://application:,,,/Assets/hilde.ico" FontFamily="{StaticResource UiFont}">
+    <Window.Resources>
+        <Style x:Key="Chip" TargetType="Button">
+            <Setter Property="Foreground" Value="#E8EDF4"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Padding" Value="13,7"/>
+            <Setter Property="Margin" Value="0,0,6,0"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Background" Value="#22FFFFFF"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="B" CornerRadius="15" Padding="{TemplateBinding Padding}" Background="{TemplateBinding Background}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="B" Property="Background" Value="#38FFFFFF"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="B" Property="Opacity" Value="0.4"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="Primary" TargetType="Button" BasedOn="{StaticResource Chip}">
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Padding" Value="18,7"/>
+            <Setter Property="Margin" Value="0"/>
+            <Setter Property="Background">
+                <Setter.Value>
+                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                        <GradientStop Color="#2E6BFF" Offset="0"/>
+                        <GradientStop Color="#22B07D" Offset="1"/>
+                    </LinearGradientBrush>
+                </Setter.Value>
+            </Setter>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="B" CornerRadius="15" Padding="{TemplateBinding Padding}" Background="{TemplateBinding Background}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="B" Property="Opacity" Value="0.88"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="B" Property="Opacity" Value="0.4"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="Box" TargetType="TextBox">
+            <Setter Property="Background" Value="#0E1117"/>
+            <Setter Property="Foreground" Value="#F0F4FA"/>
+            <Setter Property="CaretBrush" Value="#7EF0B4"/>
+            <Setter Property="SelectionBrush" Value="#2E6BFF"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="12,10"/>
+            <Setter Property="FontSize" Value="15"/>
+            <Setter Property="TextWrapping" Value="Wrap"/>
+            <Setter Property="AcceptsReturn" Value="True"/>
+            <Setter Property="VerticalScrollBarVisibility" Value="Auto"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TextBox">
+                        <Border CornerRadius="10" Background="{TemplateBinding Background}" BorderBrush="#22FFFFFF" BorderThickness="1">
+                            <ScrollViewer x:Name="PART_ContentHost" Margin="0"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
+    <Border Margin="10" CornerRadius="16" Background="#F5161A22" BorderBrush="#33FFFFFF" BorderThickness="1">
+        <Border.Effect>
+            <DropShadowEffect BlurRadius="22" ShadowDepth="3" Opacity="0.45" Color="Black"/>
+        </Border.Effect>
+        <Grid Margin="14,10,14,14">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <!-- Kopf: zum Verschieben ziehen -->
+            <Grid x:Name="Header" Background="Transparent" MouseLeftButtonDown="OnDrag" Margin="0,0,0,10">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <Border Width="30" Height="30" CornerRadius="15">
+                    <Border.Background>
+                        <ImageBrush ImageSource="pack://application:,,,/Assets/avatar.png" Stretch="UniformToFill"/>
+                    </Border.Background>
+                </Border>
+                <StackPanel Grid.Column="1" Margin="10,0,0,0" VerticalAlignment="Center">
+                    <TextBlock Text="Diktierfenster" Foreground="#F0F4FA" FontSize="14" FontWeight="SemiBold"/>
+                    <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
+                        <Ellipse x:Name="StatusDot" Width="7" Height="7" Fill="#9CA3AF" VerticalAlignment="Center"/>
+                        <TextBlock x:Name="StatusText" Foreground="#9AA8BA" FontSize="12" Margin="6,0,0,0" Text="Bereit"/>
+                        <Border Width="60" Height="4" CornerRadius="2" Background="#22FFFFFF" Margin="10,0,0,0"
+                                VerticalAlignment="Center" x:Name="LevelTrack" Visibility="Collapsed">
+                            <Border x:Name="LevelBar" Width="0" HorizontalAlignment="Left" CornerRadius="2" Background="#34D399"/>
+                        </Border>
+                    </StackPanel>
+                </StackPanel>
+                <Button Grid.Column="2" Style="{StaticResource Chip}" Margin="0" Padding="10,4" Click="OnClose"
+                        ToolTip="Schließen (Text verwerfen)" Content="✕" FontSize="13" Background="Transparent"/>
+            </Grid>
+
+            <!-- Text, beim Kürzen/Klarer mit „Vorher“ daneben -->
+            <Grid Grid.Row="1">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition x:Name="CompareCol" Width="0"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <Grid x:Name="ComparePane" Visibility="Collapsed" Margin="0,0,10,0">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+                    <TextBlock Text="VORHER" Foreground="#7F8CA0" FontSize="11" FontWeight="SemiBold" Margin="2,0,0,5"/>
+                    <TextBox x:Name="BeforeBox" Grid.Row="1" Style="{StaticResource Box}" IsReadOnly="True" Foreground="#AEB9C8"/>
+                </Grid>
+                <Grid Grid.Column="1">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+                    <TextBlock x:Name="AfterLabel" Text="NEU VON HILDE – du kannst weiter ändern" Foreground="#7EF0B4"
+                               FontSize="11" FontWeight="SemiBold" Margin="2,0,0,5" Visibility="Collapsed"/>
+                    <TextBox x:Name="Editor" Grid.Row="1" Style="{StaticResource Box}" SpellCheck.IsEnabled="True"
+                             Language="de-DE" PreviewKeyDown="OnEditorKey"/>
+                    <TextBlock x:Name="Placeholder" Grid.Row="1" IsHitTestVisible="False" Margin="16,11,16,0"
+                               Foreground="#5D6B7E" FontSize="15" TextWrapping="Wrap"
+                               Text="Sprich einfach los – der Text erscheint hier. Du kannst jederzeit hineinklicken und ändern."/>
+                </Grid>
+            </Grid>
+
+            <!-- Live: was HILDE gerade hört -->
+            <Border x:Name="LivePanel" Grid.Row="2" Visibility="Collapsed" Margin="0,8,0,0" Padding="12,8"
+                    CornerRadius="10" Background="#14FFFFFF">
+                <TextBlock x:Name="LiveText" TextWrapping="Wrap" FontSize="13.5" Foreground="#DDE4EE" MaxHeight="80"/>
+            </Border>
+
+            <TextBlock x:Name="Notice" Grid.Row="3" Visibility="Collapsed" Margin="2,8,0,0" FontSize="12.5"
+                       TextWrapping="Wrap" Foreground="#FCA5A5"/>
+
+            <!-- Aktionen -->
+            <DockPanel Grid.Row="4" Margin="0,12,0,0" LastChildFill="False">
+                <StackPanel Orientation="Horizontal" DockPanel.Dock="Left">
+                    <Button x:Name="DictateButton" Style="{StaticResource Chip}" Click="OnDictate" Content="🎙  Diktieren"/>
+                    <Button x:Name="ShortenButton" Style="{StaticResource Chip}" Click="OnShorten" Content="Kürzen"
+                            ToolTip="Ganzen Text kürzen – oder nur die Markierung"/>
+                    <Button x:Name="ClarifyButton" Style="{StaticResource Chip}" Click="OnClarify" Content="Sachlich &amp; klar"
+                            ToolTip="Ganzen Text sachlich und klar fassen – oder nur die Markierung"/>
+                    <Button x:Name="AcceptButton" Style="{StaticResource Chip}" Click="OnAccept" Content="✓  Übernehmen"
+                            Visibility="Collapsed" Background="#3322B07D"/>
+                    <Button x:Name="RevertButton" Style="{StaticResource Chip}" Click="OnRevert" Content="↶  Vorher behalten"
+                            Visibility="Collapsed"/>
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" DockPanel.Dock="Right">
+                    <Button x:Name="CopyButton" Style="{StaticResource Chip}" Click="OnCopy" Content="Kopieren"/>
+                    <Button x:Name="OriginButton" Style="{StaticResource Chip}" Click="OnOrigin" Visibility="Collapsed"
+                            ToolTip="Strg+Umschalt+Enter"/>
+                    <Button x:Name="InsertButton" Style="{StaticResource Primary}" Click="OnInsert" Content="Einfügen  ↗"
+                            ToolTip="Strg+Enter – der Text hängt dann am Mauszeiger: dorthin klicken, wo er hin soll"/>
+                </StackPanel>
+            </DockPanel>
+        </Grid>
+    </Border>
+</Window>

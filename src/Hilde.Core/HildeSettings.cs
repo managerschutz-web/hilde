@@ -79,6 +79,8 @@ public sealed class InsertionSettings
 {
     [JsonConverter(typeof(JsonStringEnumConverter))]
     public InsertionMethod Method { get; set; } = InsertionMethod.Auto;
+    [JsonConverter(typeof(JsonStringEnumConverter))]
+    public DictationFlow Flow { get; set; } = DictationFlow.Auto;
     public bool RestoreClipboard { get; set; } = true;
     /// <summary>Wartezeit nach dem Einfügebefehl, bevor die Zwischenablage zurückgesetzt wird.</summary>
     public int RestoreDelayMs { get; set; } = 600;

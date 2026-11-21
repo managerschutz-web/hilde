@@ -39,7 +39,7 @@ public partial class App : Application
         try
         {
             _host = new AppHost(paths, Dispatcher);
-            await _host.StartAsync(startInTray: tray, beforeShow: splash == null ? null : () => splash.CloseGentlyAsync(TimeSpan.FromSeconds(1.8)));
+            await _host.StartAsync(startInTray: tray, beforeShow: splash == null ? null : () => splash.WaitAndCloseAsync(TimeSpan.FromSeconds(15)));
             _single.ActivationRequested += () => Dispatcher.InvokeAsync(() => _host?.ShowMainWindow());
             _single.Listen();
         }

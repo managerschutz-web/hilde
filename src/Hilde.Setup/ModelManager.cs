@@ -324,49 +324,6 @@ public sealed class ModelManager : IModelManager
         return string.Equals(hash, expected, StringComparison.OrdinalIgnoreCase);
     }
 
-    public sealed record ModelUpdate(string Id, string DisplayName, ModelKind Kind, long? SizeBytes, string License, string? Replaces);
-    public sealed record UpdateCheck(bool Available, int CurrentVersion, int RemoteVersion, string RemoteDate, IReadOnlyList<ModelUpdate> NewModels);
-
-    private ModelManifest? _pendingRemote;
-    private string? _pendingRemoteJson;
-
-    /// <summary>Lädt die Modellliste von <paramref name="url"/> (nur auf ausdrücklichen Wunsch) und vergleicht.</summary>
-    public async Task<UpdateCheck> CheckForUpdatesAsync(string url, PerformanceTier tier, CancellationToken ct)
-    {
-        if (!url.StartsWith("https://", StringComparison.OrdinalIgnoreCase)) throw new ArgumentException("Nur https-Adressen sind erlaubt.");
-        using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        cts.CancelAfter(TimeSpan.FromSeconds(15));
-        var json = await _http.GetStringAsync(url, cts.Token).ConfigureAwait(false);
-        var remote = JsonSerializer.Deserialize<ModelManifest>(json, ModelManifest.Json) ?? throw new InvalidDataException("Modellliste leer.");
-        if (remote.Models.Count == 0 || remote.Models.Any(m => !m.Url.StartsWith("https://", StringComparison.OrdinalIgnoreCase) || string.IsNullOrWhiteSpace(m.FileName)
-                || m.FileName.Contains('/') || m.FileName.Contains('\\') || m.FileName.Contains("..")))
-            throw new InvalidDataException("Modellliste ungültig.");
-        var news = new List<ModelUpdate>();
-        foreach (var m in remote.ForTier(tier))
-        {
-            bool known = _manifest.Models.Any(x => x.Id == m.Id && x.Sha256 == m.Sha256 && x.Url == m.Url);
-            if (known) continue;
-            var replaced = _manifest.Find(m.Kind, tier);
-            news.Add(new ModelUpdate(m.Id, m.DisplayName, m.Kind, m.SizeBytes, m.License,
-                replaced != null && replaced.Id != m.Id ? replaced.DisplayName : null));
-        }
-        bool available = remote.ManifestVersion > _manifest.ManifestVersion && news.Count > 0;
-        if (available) { _pendingRemote = remote; _pendingRemoteJson = json; }
-        return new UpdateCheck(available, _manifest.ManifestVersion, remote.ManifestVersion, remote.Updated, news);
-    }
-
-    /// <summary>Übernimmt die zuvor geprüfte neue Modellliste (gespeichert unter Config/models-manifest.json).</summary>
-    public void ApplyPendingManifest()
-    {
-        if (_pendingRemote == null || _pendingRemoteJson == null) throw new InvalidOperationException("Keine neue Modellliste geprüft.");
-        Directory.CreateDirectory(_paths.Config);
-        File.WriteAllText(Path.Combine(_paths.Config, "models-manifest.json"), _pendingRemoteJson);
-        _manifest = _pendingRemote;
-        _pendingRemote = null;
-        _pendingRemoteJson = null;
-        _log.Information("Modellliste v{Version} übernommen", _manifest.ManifestVersion);
-    }
-
     /// <summary>Entfernt installierte Modelle, die in der aktuellen Liste nicht mehr vorkommen und für die es Ersatz gibt.</summary>
     public int RemoveSuperseded()
     {
@@ -378,23 +335,6 @@ public sealed class ModelManager : IModelManager
             removed++;
         }
         return removed;
-    }
-
-    /// <summary>Wählt die neuere der beiden Listen: mitgeliefert oder zuletzt übernommen.</summary>
-    public static ModelManifest LoadEffective(string bundledPath, HildePaths paths)
-    {
-        var bundled = ModelManifest.Load(bundledPath);
-        var local = Path.Combine(paths.Config, "models-manifest.json");
-        try
-        {
-            if (File.Exists(local))
-            {
-                var l = ModelManifest.Load(local);
-                if (l.ManifestVersion > bundled.ManifestVersion) return l;
-            }
-        }
-        catch { /* defekt → mitgelieferte Liste */ }
-        return bundled;
     }
 
     /// <summary>Verschiebt alle installierten Modelle in einen neuen Ordner (Engines müssen beendet sein).</summary>

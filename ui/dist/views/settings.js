@@ -84,7 +84,7 @@ export function renderSettings(root) {
                 .map(([bg, ac, name]) => h('button', {
                 class: 'swatch', title: name, 'aria-label': `Farbschema ${name}`, style: `--bg:${bg};--ac:${ac}`,
                 onclick: () => { s.pill.backgroundColor = bg; s.pill.accentColor = ac; persist(); draw(); }
-            }, h('span', null), name)))), section('Archiv', toggle('Diktate im Archiv speichern', s.archive.enabled, v => s.archive.enabled = v), toggle('Audio behalten', s.archive.keepAudio, v => s.archive.keepAudio = v, 'Nötig für die Wiedergabe im Archiv. Standard: Audio wird nach der Verarbeitung gelöscht.'), number('Audio automatisch löschen nach', s.archive.audioRetentionDays, 0, 3650, 1, 'Tagen (0 = nie)', v => s.archive.audioRetentionDays = v)), section('Leistung & Modelle', select('Leistungsstufe', s.performanceTier, [['Light', 'Leicht (ab ca. 8 GB RAM)'], ['Standard', 'Standard (ab ca. 16 GB RAM)']], v => s.performanceTier = v), toggle('Grafikkarte nutzen (Vulkan)', s.useGpu, v => s.useGpu = v, 'Bei Problemen schaltet HILDE automatisch auf die CPU um.'), number('Modelle entladen nach', s.modelIdleUnloadMinutes, 1, 240, 1, 'min Inaktivität', v => s.modelIdleUnloadMinutes = v), h('div', { class: 'row' }, h('span', { class: 'muted' }, `${installed} von ${models.models.length} Modellen installiert · noch ${fmtBytes(models.requiredBytes)} · frei ${fmtBytes(models.freeBytes)}`), h('button', { class: 'btn', onclick: () => openSetup(3) }, 'Modelle verwalten'), h('button', { class: 'btn', onclick: checkUpdates }, 'Nach neuen Modellen suchen')), h('div', { class: 'field' }, h('span', null, 'Speicherort der Modelle'), h('code', { class: 'path' }, loc.path), loc.oneDrive ? h('small', { class: 'warn' }, 'Achtung: Dieser Ordner liegt in OneDrive und wird in die Cloud synchronisiert.') : null, h('div', { class: 'row tight' }, h('button', { class: 'btn', onclick: moveModels }, 'Ändern …'), loc.isDefault ? null : h('button', { class: 'btn', onclick: () => doMove({ reset: true }) }, 'Standard wiederherstellen')))), section('Allgemein', toggle('Mit Windows starten', s.autostart, v => s.autostart = v), select('Darstellung', s.theme, [['system', 'Wie Windows'], ['light', 'Hell'], ['dark', 'Dunkel']], v => s.theme = v), h('div', { class: 'row' }, h('button', { class: 'btn', onclick: () => openSetup(1) }, 'Einrichtung erneut ausführen'), h('button', { class: 'btn', onclick: () => call('app.openData') }, 'Datenordner öffnen'), h('button', { class: 'btn', onclick: () => call('app.openLogs') }, 'Protokolle öffnen'))), section('Über HILDE', h('p', null, `Version ${info.version} · Daten lokal unter `, h('code', null, info.dataPath)), h('p', { class: 'muted small' }, 'Keine Cloud, keine Telemetrie, keine Anmeldung. Protokolle enthalten nie Diktatinhalte.'), h('div', { class: 'row' }, h('button', { class: 'btn', onclick: showHealth }, 'Komponenten prüfen'), h('button', { class: 'btn', onclick: showLicenses }, 'Lizenzen anzeigen'), uninst.available ? h('button', { class: 'btn danger-ghost', onclick: uninstall }, 'HILDE deinstallieren …') : null))));
+            }, h('span', null), name)))), section('Archiv', toggle('Diktate im Archiv speichern', s.archive.enabled, v => s.archive.enabled = v), toggle('Audio behalten', s.archive.keepAudio, v => s.archive.keepAudio = v, 'Nötig für die Wiedergabe im Archiv. Standard: Audio wird nach der Verarbeitung gelöscht.'), number('Audio automatisch löschen nach', s.archive.audioRetentionDays, 0, 3650, 1, 'Tagen (0 = nie)', v => s.archive.audioRetentionDays = v)), section('Leistung & Modelle', select('Leistungsstufe', s.performanceTier, [['Light', 'Leicht (ab ca. 8 GB RAM)'], ['Standard', 'Standard (ab ca. 16 GB RAM)']], v => s.performanceTier = v), toggle('Grafikkarte nutzen (Vulkan)', s.useGpu, v => s.useGpu = v, 'Bei Problemen schaltet HILDE automatisch auf die CPU um.'), number('Modelle entladen nach', s.modelIdleUnloadMinutes, 1, 240, 1, 'min Inaktivität', v => s.modelIdleUnloadMinutes = v), h('div', { class: 'row' }, h('span', { class: 'muted' }, `${installed} von ${models.models.length} Modellen installiert · noch ${fmtBytes(models.requiredBytes)} · frei ${fmtBytes(models.freeBytes)}`), h('button', { class: 'btn', onclick: () => openSetup(3) }, 'Modelle verwalten')), h('div', { class: 'field' }, h('span', null, 'Speicherort der Modelle'), h('code', { class: 'path' }, loc.path), loc.oneDrive ? h('small', { class: 'warn' }, 'Achtung: Dieser Ordner liegt in OneDrive und wird in die Cloud synchronisiert.') : null, h('div', { class: 'row tight' }, h('button', { class: 'btn', onclick: moveModels }, 'Ändern …'), loc.isDefault ? null : h('button', { class: 'btn', onclick: () => doMove({ reset: true }) }, 'Standard wiederherstellen')))), section('Allgemein', toggle('Mit Windows starten', s.autostart, v => s.autostart = v), select('Darstellung', s.theme, [['system', 'Wie Windows'], ['light', 'Hell'], ['dark', 'Dunkel']], v => s.theme = v), h('div', { class: 'row' }, h('button', { class: 'btn', onclick: () => openSetup(1) }, 'Einrichtung erneut ausführen'), h('button', { class: 'btn', onclick: () => call('app.openData') }, 'Datenordner öffnen'), h('button', { class: 'btn', onclick: () => call('app.openLogs') }, 'Protokolle öffnen'))), section('Über HILDE', h('p', null, `Version ${info.version} · Daten lokal unter `, h('code', null, info.dataPath)), h('p', { class: 'muted small' }, 'Keine Cloud, keine Telemetrie, keine Anmeldung. Protokolle enthalten nie Diktatinhalte.'), h('div', { class: 'row' }, h('button', { class: 'btn', onclick: showHealth }, 'Komponenten prüfen'), h('button', { class: 'btn', onclick: showLicenses }, 'Lizenzen anzeigen'), uninst.available ? h('button', { class: 'btn danger-ghost', onclick: uninstall }, 'HILDE deinstallieren …') : null))));
         }
         catch (e) {
             toast(errorText(e), 'error');
@@ -135,28 +135,6 @@ export function renderSettings(root) {
     function colorRow(label, value, set) {
         const inp = h('input', { type: 'color', class: 'color', value, onchange: (e) => { set(e.target.value.toUpperCase()); persist(); } });
         return h('label', { class: 'field inline' }, h('span', null, label), inp);
-    }
-    async function checkUpdates() {
-        toast('Suche nach neuen Modellen …', 'info', 2000);
-        const r = await call('models.checkUpdates', { tier: s.performanceTier }, 30000);
-        if (!r.ok) {
-            toast(r.message, 'error', 6000);
-            return;
-        }
-        if (!r.available) {
-            toast('Alles aktuell – keine neuen geprüften Modelle.', 'ok');
-            return;
-        }
-        const list = r.newModels.map((m) => `• ${m.displayName} (${fmtBytes(m.sizeBytes)}, ${m.license})${m.replaces ? `\n   ersetzt: ${m.replaces}` : ''}`).join('\n');
-        if (!await confirmDialog('Neue Modelle verfügbar', `Modellliste vom ${r.remoteDate}:\n\n${list}\n\nJetzt herunterladen und installieren? Die bisherigen Modelle werden erst entfernt, wenn die neuen geprüft sind.`, 'Installieren'))
-            return;
-        await call('models.applyUpdate', { tier: s.performanceTier });
-        toast('Neue Modelle werden geladen – Fortschritt unter „Modelle verwalten“.', 'info', 6000);
-        const off = on('modelsDone', (d) => {
-            off();
-            toast(d.ok ? `Neue Modelle installiert${d.removed ? `, ${d.removed} alte entfernt` : ''}.` : d.message, d.ok ? 'ok' : 'error', 7000);
-            draw();
-        });
     }
     async function moveModels() {
         const r = await call('models.chooseFolder');

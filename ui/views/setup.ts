@@ -90,7 +90,6 @@ function show(startStep: number, onDone: () => void): void {
   async function stepModels(body: HTMLElement): Promise<void> {
     const s = await call<any>('settings.get');
     tier = s.performanceTier;
-    const updateInfo = h('div');
     const list = h('div', { class: 'models' });
     const status = h('div', { class: 'muted' });
     const bars = new Map<string, HTMLElement>();
@@ -153,34 +152,12 @@ function show(startStep: number, onDone: () => void): void {
     body.append(
       h('h2', null, 'Modelle einrichten'),
       h('p', { class: 'muted' }, 'Downloads lassen sich unterbrechen und später fortsetzen. Jede Datei wird per SHA-256 geprüft. Ohne Internet: Offline-Paket importieren.'),
-      updateInfo, list, status,
+      list, status,
       h('label', { class: 'check' }, skipLlm, 'KI-Textbereinigung vorerst überspringen (regelbasierte Bereinigung bleibt aktiv)'),
       h('div', { class: 'row' }, dlBtn, pauseBtn, importFolder, importZip),
       h('div', { class: 'row end wizard-nav' }, h('button', { class: 'btn', onclick: () => { step = 2; render(); } }, 'Zurück'), nextBtn));
     await draw();
 
-    // Neuere geprüfte Modellliste? Bei Neuinstallation direkt verwenden, sonst anbieten.
-    try {
-      const st = await call<any>('models.status', { tier });
-      const r = await call<any>('models.checkUpdates', { tier }, 20000);
-      if (r.ok && r.available) {
-        const nothingInstalled = !st.models.some((m: any) => m.installed && m.kind !== 'vad');
-        if (nothingInstalled) {
-          await call('models.applyUpdate', { tier, includeLlm: !llmSkipped });
-          downloading = true; pauseBtn.hidden = false;
-          updateInfo.append(h('div', { class: 'banner learn' }, `Neueste geprüfte Modellliste (Stand ${r.remoteDate}) wird verwendet – Download läuft.`));
-          await draw();
-        } else {
-          updateInfo.append(h('div', { class: 'banner learn' },
-            h('span', null, `Neuere geprüfte Modelle verfügbar (Stand ${r.remoteDate}).`), h('span', { class: 'spacer' }),
-            h('button', { class: 'btn small primary', onclick: async () => {
-              await call('models.applyUpdate', { tier, includeLlm: !llmSkipped });
-              updateInfo.textContent = 'Neue Modelle werden geladen …';
-              downloading = true; pauseBtn.hidden = false; await draw();
-            } }, 'Aktualisieren')));
-        }
-      }
-    } catch { /* Liste nicht erreichbar → mitgelieferte Modelle */ }
   }
 
   async function stepMic(body: HTMLElement): Promise<void> {

@@ -178,6 +178,7 @@ public sealed class DictationController : IAsyncDisposable
         }
         _deviceLostFlag = false;
         _doneResetCts?.Cancel();
+        _log.Information("Aufnahme gestartet ({Mode}, Ziel {Target})", mode, target.ProcessName ?? "–");
         SetState(HildeState.Recording,
             mode == RecordingMode.HandsFree ? "Freihand – zum Beenden Taste erneut drücken" : "Aufnahme …", mode: mode);
     }
@@ -192,6 +193,7 @@ public sealed class DictationController : IAsyncDisposable
         PreviewChanged?.Invoke("", "");
         try { _audio.Cancel(); } catch (Exception ex) { _log.Debug(ex, "Cancel"); }
         TryDeleteDir(_paths.RecordingDir(ctx.Id));
+        _log.Information(silent ? "Aufnahme verworfen (kurzer Tipp oder Tastenkürzel)" : "Aufnahme verworfen (Esc)");
         if (silent) SetIdleOrProcessing();
         else SetState(HildeState.Done, "Aufnahme verworfen");
         if (!silent) ScheduleReady();

@@ -29,6 +29,33 @@ public sealed class LowLevelKeyboardHook : IDisposable
     [DllImport("user32.dll")] private static extern int GetMessage(out MSG msg, IntPtr hwnd, uint min, uint max);
     [DllImport("user32.dll")] private static extern bool PostThreadMessage(uint threadId, uint msg, IntPtr w, IntPtr l);
     [DllImport("kernel32.dll")] private static extern uint GetCurrentThreadId();
+    [DllImport("user32.dll")] private static extern short GetAsyncKeyState(int vKey);
+    private const uint WM_REINSTALL = 0x8000 + 0x48; // WM_APP + 'H'
+    private Timer? _watchdog;
+    private Timer? _reinstallTimer;
+
+    /// <summary>
+    /// Sicherheitsnetz: Geht das Loslassen der Taste verloren (z. B. Remotedesktop im Vordergrund, Sperrbildschirm,
+    /// UAC-Dialog), bliebe HILDE sonst „hängen“ und würde auf weitere Tastendrücke nicht mehr reagieren.
+    /// </summary>
+    private void Watchdog()
+    {
+        try
+        {
+            lock (_gestures)
+            {
+                if (!_triggerDown) return;
+                long now = Environment.TickCount64;
+                bool physicallyDown = (GetAsyncKeyState(_triggerKey()) & 0x8000) != 0;
+                if (physicallyDown || now - _lastTriggerEvent < 400) return;
+                _triggerDown = false;
+                _log.Information("Loslassen der Diktiertaste nicht empfangen – Zustand korrigiert");
+                _dispatch(_gestures.TriggerUp(now));
+            }
+        }
+        catch (Exception ex) { Debug.WriteLine(ex); }
+    }
+    private long _lastTriggerEvent;
 
     [StructLayout(LayoutKind.Sequential)]
     private struct MSG { public IntPtr hwnd; public uint message; public IntPtr wParam, lParam; public uint time; public int x, y; }
@@ -79,7 +106,13 @@ public sealed class LowLevelKeyboardHook : IDisposable
             if (_hook == IntPtr.Zero) error = new InvalidOperationException("Tastatur-Hook konnte nicht installiert werden (" + Marshal.GetLastWin32Error() + ")");
             ready.Set();
             if (_hook == IntPtr.Zero) return;
-            while (GetMessage(out _, IntPtr.Zero, 0, 0) > 0) { }
+            while (GetMessage(out var msg, IntPtr.Zero, 0, 0) > 0)
+            {
+                if (msg.message != WM_REINSTALL) continue;
+                // Windows entfernt Hooks stillschweigend, wenn sie einmal zu langsam waren – vorsorglich erneuern.
+                var fresh = SetWindowsHookEx(WH_KEYBOARD_LL, _proc, GetModuleHandle(null), 0);
+                if (fresh != IntPtr.Zero) { UnhookWindowsHookEx(_hook); _hook = fresh; }
+            }
             UnhookWindowsHookEx(_hook);
             _hook = IntPtr.Zero;
         }) { IsBackground = true, Name = "HILDE-Hotkey", Priority = ThreadPriority.AboveNormal };
@@ -87,6 +120,9 @@ public sealed class LowLevelKeyboardHook : IDisposable
         ready.Wait();
         if (error != null) throw error;
         _log.Information("Globaler Hotkey aktiv");
+        _watchdog = new Timer(_ => Watchdog(), null, 400, 400);
+        _reinstallTimer = new Timer(_ => { if (_threadId != 0) PostThreadMessage(_threadId, WM_REINSTALL, IntPtr.Zero, IntPtr.Zero); },
+            null, TimeSpan.FromMinutes(10), TimeSpan.FromMinutes(10));
     }
 
     private IntPtr Callback(int nCode, IntPtr wParam, IntPtr lParam)
@@ -120,8 +156,26 @@ public sealed class LowLevelKeyboardHook : IDisposable
             }
             if (vk == _triggerKey())
             {
-                if (down && !_triggerDown) { _triggerDown = true; GestureAction a; lock (_gestures) a = _gestures.TriggerDown(now); _dispatch(a); }
-                else if (up) { _triggerDown = false; GestureAction a; lock (_gestures) a = _gestures.TriggerUp(now); _dispatch(a); }
+                lock (_gestures)
+                {
+                    if (down)
+                    {
+                        // Verpasstes Loslassen: Autorepeat kommt spätestens nach ~1 s, längere Lücke = neuer Tastendruck
+                        if (_triggerDown && now - _lastTriggerEvent > 1200)
+                        {
+                            _triggerDown = false;
+                            _dispatch(_gestures.TriggerUp(_lastTriggerEvent));
+                        }
+                        _lastTriggerEvent = now;
+                        if (!_triggerDown) { _triggerDown = true; _dispatch(_gestures.TriggerDown(now)); }
+                    }
+                    else if (up)
+                    {
+                        _lastTriggerEvent = now;
+                        _triggerDown = false;
+                        _dispatch(_gestures.TriggerUp(now));
+                    }
+                }
             }
             else if (vk == VK_ESCAPE && down && _escapeEnabled() && _gestures.IsRecording)
             {
@@ -144,6 +198,8 @@ public sealed class LowLevelKeyboardHook : IDisposable
 
     public void Dispose()
     {
+        _watchdog?.Dispose();
+        _reinstallTimer?.Dispose();
         if (_threadId != 0) PostThreadMessage(_threadId, 0x0012 /* WM_QUIT */, IntPtr.Zero, IntPtr.Zero);
         _thread?.Join(1000);
     }

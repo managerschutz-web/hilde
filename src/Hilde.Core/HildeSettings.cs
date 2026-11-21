@@ -25,8 +25,6 @@ public sealed class HildeSettings
     public bool LivePreview { get; set; } = true;
     /// <summary>Eigener Modellordner (null = %LOCALAPPDATA%\HILDE\Models).</summary>
     public string? ModelsDirectory { get; set; }
-    /// <summary>Wo HILDE auf Knopfdruck nach neuen, geprüften Modellen sucht.</summary>
-    public string ModelsManifestUrl { get; set; } = "https://wetzel-web.de/hilde/modelle.json";
     /// <summary>„neuer Absatz“, „neue Zeile“, „Doppelpunkt“.</summary>
     public bool DictationCommands { get; set; } = true;
     public FormatSettings Format { get; set; } = new();

@@ -135,7 +135,7 @@ export function renderSettings(root: HTMLElement): () => void {
             number('Modelle entladen nach', s.modelIdleUnloadMinutes, 1, 240, 1, 'min Inaktivität', v => s.modelIdleUnloadMinutes = v),
             h('div', { class: 'row' }, h('span', { class: 'muted' }, `${installed} von ${models.models.length} Modellen installiert · noch ${fmtBytes(models.requiredBytes)} · frei ${fmtBytes(models.freeBytes)}`),
               h('button', { class: 'btn', onclick: () => openSetup(3) }, 'Modelle verwalten'),
-              h('button', { class: 'btn', onclick: checkUpdates }, 'Nach neuen Modellen suchen')),
+),
             h('div', { class: 'field' }, h('span', null, 'Speicherort der Modelle'),
               h('code', { class: 'path' }, loc.path),
               loc.oneDrive ? h('small', { class: 'warn' }, 'Achtung: Dieser Ordner liegt in OneDrive und wird in die Cloud synchronisiert.') : null,
@@ -191,22 +191,6 @@ export function renderSettings(root: HTMLElement): () => void {
   function colorRow(label: string, value: string, set: (v: string) => void) {
     const inp = h('input', { type: 'color', class: 'color', value, onchange: (e: Event) => { set((e.target as HTMLInputElement).value.toUpperCase()); persist(); } });
     return h('label', { class: 'field inline' }, h('span', null, label), inp);
-  }
-
-  async function checkUpdates(): Promise<void> {
-    toast('Suche nach neuen Modellen …', 'info', 2000);
-    const r = await call<any>('models.checkUpdates', { tier: s.performanceTier }, 30000);
-    if (!r.ok) { toast(r.message, 'error', 6000); return; }
-    if (!r.available) { toast('Alles aktuell – keine neuen geprüften Modelle.', 'ok'); return; }
-    const list = r.newModels.map((m: any) => `• ${m.displayName} (${fmtBytes(m.sizeBytes)}, ${m.license})${m.replaces ? `\n   ersetzt: ${m.replaces}` : ''}`).join('\n');
-    if (!await confirmDialog('Neue Modelle verfügbar', `Modellliste vom ${r.remoteDate}:\n\n${list}\n\nJetzt herunterladen und installieren? Die bisherigen Modelle werden erst entfernt, wenn die neuen geprüft sind.`, 'Installieren')) return;
-    await call('models.applyUpdate', { tier: s.performanceTier });
-    toast('Neue Modelle werden geladen – Fortschritt unter „Modelle verwalten“.', 'info', 6000);
-    const off = on('modelsDone', (d: any) => {
-      off();
-      toast(d.ok ? `Neue Modelle installiert${d.removed ? `, ${d.removed} alte entfernt` : ''}.` : d.message, d.ok ? 'ok' : 'error', 7000);
-      draw();
-    });
   }
 
   async function moveModels(): Promise<void> {

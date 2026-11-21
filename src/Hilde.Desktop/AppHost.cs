@@ -64,7 +64,7 @@ public sealed class AppHost : IAsyncDisposable
         await _dictionary.ReloadAsync();
 
         var manifestPath = Path.Combine(AppContext.BaseDirectory, "models", "manifest.json");
-        _models = new ModelManager(_paths, ModelManager.LoadEffective(manifestPath, _paths), Log.Logger);
+        _models = new ModelManager(_paths, ModelManifest.Load(manifestPath), Log.Logger);
         _models.Progress += (_, p) => _bridge.Emit("modelProgress", p);
 
         var engineExe = Path.Combine(AppContext.BaseDirectory, "Hilde.Engine.exe");
@@ -144,6 +144,13 @@ public sealed class AppHost : IAsyncDisposable
             catch (Exception ex) { _log.Warning(ex, "Wiederherstellung"); }
         });
 
+        if (_settings.Current.SetupCompleted)
+        {
+            var missing = _models.GetStatus(Tier).Where(m => m.Required && !m.Installed && (m.Kind != ModelKind.Llm || !_settings.Current.LlmSkipped)).ToList();
+            if (missing.Count > 0)
+                _ = _ui.InvokeAsync(() => _tray?.Notify("HILDE – neue Modelle",
+                    $"Mit diesem Update stehen {missing.Count} neue Modelle bereit. Einstellungen › Modelle verwalten › Herunterladen."));
+        }
         if (beforeShow != null) await beforeShow();
         if (!_settings.Current.SetupCompleted || !startInTray) ShowMainWindow();
     }
@@ -557,7 +564,11 @@ public sealed class AppHost : IAsyncDisposable
                 try
                 {
                     await _models.DownloadAsync(tier, llm, cts.Token);
-                    _bridge.Emit("modelsDone", new { ok = true });
+                    // Nach einem Update: neue Modelle sind geprüft → abgelöste entfernen (Engines vorher freigeben)
+                    await _speechClient.StopAsync();
+                    await _llmClient.StopAsync();
+                    int removed = _models.RemoveSuperseded();
+                    _bridge.Emit("modelsDone", new { ok = true, removed });
                 }
                 catch (OperationCanceledException) { _bridge.Emit("modelsDone", new { ok = false, cancelled = true, message = "Pausiert – Fortsetzen jederzeit möglich." }); }
                 catch (HildeException ex) { _bridge.Emit("modelsDone", new { ok = false, errorId = ex.Error.Id, message = ex.Error.Message + (ex.Error.Hint is { } h ? " " + h : "") }); }
@@ -607,50 +618,6 @@ public sealed class AppHost : IAsyncDisposable
             Uninstaller.Launch(entry, p.Bool("deleteData"), _paths.Root);
             Quit();
             return null;
-        });
-        b.RegisterAsync("models.checkUpdates", async p =>
-        {
-            var tier = Enum.TryParse<PerformanceTier>(p.Str("tier"), true, out var t) ? t : Tier;
-            try
-            {
-                var r = await _models.CheckForUpdatesAsync(_settings.Current.ModelsManifestUrl, tier, CancellationToken.None);
-                return new { ok = true, r.Available, r.CurrentVersion, r.RemoteVersion, r.RemoteDate, newModels = r.NewModels, message = (string?)null };
-            }
-            catch (Exception ex)
-            {
-                _log.Information("Modellliste nicht erreichbar: {Msg}", ex.Message);
-                return new { ok = false, Available = false, CurrentVersion = 0, RemoteVersion = 0, RemoteDate = "", newModels = (IReadOnlyList<ModelManager.ModelUpdate>)Array.Empty<ModelManager.ModelUpdate>(),
-                    message = (string?)"Die Modellliste ist gerade nicht erreichbar. HILDE arbeitet mit den vorhandenen Modellen weiter." };
-            }
-        });
-        b.Register("models.applyUpdate", p =>
-        {
-            if (_downloadCts != null) return new { started = false };
-            _models.ApplyPendingManifest();
-            var tier = Enum.TryParse<PerformanceTier>(p.Str("tier"), true, out var t) ? t : Tier;
-            bool llm = !_settings.Current.LlmSkipped || p.Bool("includeLlm");
-            var cts = _downloadCts = new CancellationTokenSource();
-            _ = Task.Run(async () =>
-            {
-                try
-                {
-                    await _models.DownloadAsync(tier, llm, cts.Token);
-                    // Neue Modelle laufen erst nach Neustart der Engines; alte erst danach löschen
-                    await _speechClient.StopAsync();
-                    await _llmClient.StopAsync();
-                    int removed = _models.RemoveSuperseded();
-                    _bridge.Emit("modelsDone", new { ok = true, removed });
-                }
-                catch (OperationCanceledException) { _bridge.Emit("modelsDone", new { ok = false, cancelled = true, message = "Pausiert – Fortsetzen jederzeit möglich." }); }
-                catch (HildeException ex) { _bridge.Emit("modelsDone", new { ok = false, errorId = ex.Error.Id, message = ex.Error.Message }); }
-                catch (Exception ex)
-                {
-                    _log.Error(ex, "Modell-Aktualisierung");
-                    _bridge.Emit("modelsDone", new { ok = false, errorId = HildeErrors.DownloadFailed.Id, message = HildeErrors.DownloadFailed.Message });
-                }
-                finally { _downloadCts = null; }
-            });
-            return new { started = true };
         });
         b.Register("models.cancel", _ => { _downloadCts?.Cancel(); return null; });
         b.RegisterAsync("models.import", async p =>

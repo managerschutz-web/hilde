@@ -152,9 +152,10 @@ public class PromptBuilderTests
     [Fact]
     public void Gemma_has_no_system_role()
     {
-        var p = PromptBuilder.Build(PromptFormat.Gemma, TextMode.Professional, "hallo", ["eVB"]);
+        var p = PromptBuilder.Build(PromptFormat.Gemma, TextMode.Professional, "hallo, die eVB kommt", ["eVB", "HSN/TSN"]);
         Assert.StartsWith("<start_of_turn>user", p.Prompt);
         Assert.Contains("eVB", p.Prompt);
+        Assert.DoesNotContain("HSN/TSN", p.Prompt); // nicht im Text → nicht nennen, sonst schreibt das Modell es dazu
         Assert.Contains("Grammatik", p.Prompt);
     }
 

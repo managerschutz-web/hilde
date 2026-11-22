@@ -227,6 +227,8 @@ public sealed class DictationController : IAsyncDisposable
         }
         catch (Exception ex)
         {
+            preview?.Abandon();
+            PreviewChanged?.Invoke("", "");
             _log.Error(ex, "Aufnahme konnte nicht beendet werden");
             SetState(HildeState.Error, HildeErrors.MicrophoneLost.Message, HildeErrors.MicrophoneLost.Id);
             return;
@@ -269,6 +271,9 @@ public sealed class DictationController : IAsyncDisposable
             }
             finally
             {
+                // Vorschau in jedem Fall beenden – sonst läuft sie weiter, hört bei der nächsten Aufnahme mit
+                // und blockiert die Spracherkennung (Text „hängt“ in der Pill, alles wird langsam).
+                job.Preview?.Abandon();
                 Interlocked.Decrement(ref _pendingJobs);
             }
         }
@@ -299,6 +304,7 @@ public sealed class DictationController : IAsyncDisposable
 
         if (job.Audio.Duration < TimeSpan.FromMilliseconds(300))
         {
+            job.Preview?.Abandon();
             await DropAsync(record, HildeErrors.TooShort, silent: true).ConfigureAwait(false);
             return;
         }
@@ -307,8 +313,9 @@ public sealed class DictationController : IAsyncDisposable
         var vad = _vad.Analyze(samples);
         if (!vad.HasSpeech)
         {
+            job.Preview?.Abandon();
             // Kurzes Drücken ohne Sprache: einfach still zurück auf „Bereit“, keine Meldung
-            await DropAsync(record, HildeErrors.NoSpeech, silent: job.Audio.Duration < TimeSpan.FromSeconds(2.5)).ConfigureAwait(false);
+            await DropAsync(record, HildeErrors.NoSpeech, silent: job.Audio.Duration < TimeSpan.FromSeconds(1.2)).ConfigureAwait(false);
             return;
         }
 

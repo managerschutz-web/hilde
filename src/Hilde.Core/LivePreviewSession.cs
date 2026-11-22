@@ -57,10 +57,13 @@ public sealed class LivePreviewSession
         string provisional = "";
         try
         {
+            var started = DateTime.UtcNow;
             while (!_stop)
             {
                 await Task.Delay(600).ConfigureAwait(false);
                 if (_stop) break;
+                // Notbremse: eine Vorschau lebt nie länger als eine sehr lange Aufnahme
+                if (DateTime.UtcNow - started > TimeSpan.FromMinutes(30)) { _abandoned = true; break; }
                 int total = _audio.LiveSampleCount;
                 if (total < 2 * Rate) continue;
 
@@ -74,6 +77,7 @@ public sealed class LivePreviewSession
                     if (text.Length > 0) _committed.Append(' ').Append(text);
                     CommittedSamples = c;
                     provisional = "";
+                    if (_abandoned) return;
                     _onPreview(CommittedText, provisional);
                     continue;
                 }

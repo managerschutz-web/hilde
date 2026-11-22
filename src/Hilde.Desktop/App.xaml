@@ -66,6 +66,7 @@
             <Setter Property="CaretBrush" Value="#7EF0B4"/>
             <Setter Property="SelectionBrush" Value="#2E6BFF"/>
             <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="BorderBrush" Value="#22FFFFFF"/>
             <Setter Property="Padding" Value="12,10"/>
             <Setter Property="FontSize" Value="15"/>
             <Setter Property="TextWrapping" Value="Wrap"/>
@@ -74,7 +75,7 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="TextBox">
-                        <Border CornerRadius="10" Background="{TemplateBinding Background}" BorderBrush="#22FFFFFF" BorderThickness="1">
+                        <Border CornerRadius="10" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1">
                             <ScrollViewer x:Name="PART_ContentHost" Margin="0"/>
                         </Border>
                     </ControlTemplate>

@@ -310,6 +310,9 @@ public sealed class DictationController : IAsyncDisposable
         }
 
         float[] samples = WavIO.ReadMono16k(job.Audio.WavPath);
+        // Leise Sprache anheben (Original bleibt für die Wiedergabe im Archiv unverändert)
+        float gain = AudioGain.ComputeGain(samples);
+        if (gain > 1f) samples = AudioGain.Apply(samples, gain);
         var vad = _vad.Analyze(samples);
         if (!vad.HasSpeech)
         {
@@ -324,6 +327,12 @@ public sealed class DictationController : IAsyncDisposable
         List<TimedSegment> segments = [];
         string? prefix = null;
         string asrPath = job.Audio.WavPath;
+        if (gain > 1f)
+        {
+            asrPath = Path.Combine(_paths.RecordingDir(ctx.Id), "asr.wav");
+            WavIO.WriteMono16k(asrPath, samples);
+            _log.Information("Leise Aufnahme: Pegel für die Erkennung um Faktor {Gain:F1} angehoben", gain);
+        }
         var asrDuration = job.Audio.Duration;
         if (job.Preview != null)
         {
@@ -384,6 +393,8 @@ public sealed class DictationController : IAsyncDisposable
             }
         }
         var tAsr = sw.Elapsed;
+        TryDelete(Path.Combine(_paths.RecordingDir(ctx.Id), "asr.wav"));
+        TryDelete(Path.Combine(_paths.RecordingDir(ctx.Id), "rest.wav"));
 
         var raw = PromptEcho.Strip(HallucinationFilter.Clean(speech.Text, vad), _dictionary.InitialPrompt);
         if (string.IsNullOrWhiteSpace(raw))

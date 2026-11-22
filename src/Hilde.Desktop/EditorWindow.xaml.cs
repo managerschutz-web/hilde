@@ -1,7 +1,7 @@
 using System.Windows;
-using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Media.Animation;
 using Hilde.Core;
 using Hilde.Insertion;
 using Hilde.Language;
@@ -17,7 +17,6 @@ public partial class EditorWindow : Window
     private static readonly Brush Gray = Freeze(0x9C, 0xA3, 0xAF);
     private static readonly Brush Blue = Freeze(0x60, 0xA5, 0xFA);
     private static readonly Brush Red = Freeze(0xF8, 0x71, 0x71);
-    private static readonly Brush ProvisionalBrush = Freeze(0x8A, 0x97, 0xA8);
     private Brush _accent = Freeze(0x34, 0xD3, 0x99);
 
     private CancellationTokenSource? _rewriteCts;
@@ -73,12 +72,13 @@ public partial class EditorWindow : Window
     /// <summary>Fertig erkanntes Diktat an der Cursorposition einfügen (Strg+Z macht es rückgängig).</summary>
     public void AppendDictation(string text, InsertionTarget target, string recordId)
     {
+        RemoveLive();
         RecordIds.Add(recordId);
         if (target is Win32InsertionTarget w && w.ProcessId != (uint)Environment.ProcessId && w.Root != IntPtr.Zero
             && !Win32TextInsertionService.IsShellWindow(w.Root))
         {
             Origin = target;
-            OriginButton.Content = "↩  In " + FriendlyName(target.ProcessName);
+            OriginLabel.Text = "In " + FriendlyName(target.ProcessName);
         }
         int caret = Editor.SelectionLength > 0 ? Editor.SelectionStart + Editor.SelectionLength : Editor.CaretIndex;
         var (newText, newCaret) = EditorText.InsertAt(Editor.Text, caret, text);
@@ -90,19 +90,49 @@ public partial class EditorWindow : Window
         UpdateButtons();
     }
 
+    // Live-Text steht direkt im Textfeld (an der Cursorposition) und wird am Ende durch die Endfassung ersetzt.
+    private int _liveStart = -1;
+    private int _liveLength;
+
     public void SetPreview(string fixedText, string provisional)
     {
-        if (string.IsNullOrWhiteSpace(fixedText) && string.IsNullOrWhiteSpace(provisional))
+        var live = (fixedText + " " + provisional).Trim();
+        if (live.Length == 0) { RemoveLive(); return; }
+        if (_liveStart < 0)
         {
-            LivePanel.Visibility = Visibility.Collapsed;
-            LiveText.Inlines.Clear();
-            return;
+            _liveStart = Editor.SelectionLength > 0 ? Editor.SelectionStart + Editor.SelectionLength : Editor.CaretIndex;
+            _liveLength = 0;
+            Editor.IsUndoEnabled = false;      // Zwischenstände sollen nicht im Rückgängig-Verlauf landen
+            Editor.BorderBrush = _accent;
         }
-        LiveText.Inlines.Clear();
-        if (fixedText.Length > 0) LiveText.Inlines.Add(new Run(fixedText));
-        if (provisional.Length > 0)
-            LiveText.Inlines.Add(new Run((fixedText.Length > 0 ? " " : "") + provisional) { Foreground = ProvisionalBrush, FontStyle = FontStyles.Italic });
-        LivePanel.Visibility = Visibility.Visible;
+        Editor.IsReadOnly = false;
+        var baseText = Editor.Text.Remove(_liveStart, Math.Min(_liveLength, Editor.Text.Length - _liveStart));
+        var (full, _) = EditorText.InsertAt(baseText, _liveStart, live);
+        var piece = full.Substring(_liveStart, full.Length - baseText.Length);
+        Editor.Select(_liveStart, _liveLength);
+        Editor.SelectedText = piece;
+        _liveLength = piece.Length;
+        Editor.Select(_liveStart + _liveLength, 0);
+        Editor.IsReadOnly = true;              // während HILDE schreibt, nicht dazwischentippen
+        Editor.ScrollToLine(Math.Max(0, Editor.GetLineIndexFromCharacterIndex(Math.Max(0, Editor.CaretIndex - 1))));
+        UpdateButtons();
+    }
+
+    private void RemoveLive()
+    {
+        if (_liveStart < 0) return;
+        Editor.IsReadOnly = false;
+        _liveStart = Math.Min(_liveStart, Editor.Text.Length);
+        int len = Math.Min(_liveLength, Editor.Text.Length - _liveStart);
+        Editor.Select(_liveStart, len);
+        Editor.SelectedText = "";
+        Editor.CaretIndex = _liveStart;
+        _liveStart = -1;
+        _liveLength = 0;
+        Editor.IsReadOnly = false;
+        Editor.IsUndoEnabled = true;
+        Editor.ClearValue(BorderBrushProperty);
+        UpdateButtons();
     }
 
     public void SetLevel(float level) => LevelBar.Width = 60 * Math.Clamp(level * 3, 0, 1);
@@ -135,9 +165,48 @@ public partial class EditorWindow : Window
                 StatusText.Text = "Bereit – " + HotkeyName + " halten oder 🎙 klicken, um weiterzudiktieren";
                 break;
         }
-        DictateButton.Content = _recording ? "■  Diktat beenden" : "🎙  Diktieren";
+        MicGlyph.Visibility = _recording ? Visibility.Collapsed : Visibility.Visible;
+        StopGlyph.Visibility = _recording ? Visibility.Visible : Visibility.Collapsed;
+        DictateButton.Background = (Brush)FindResource(_recording ? "MicLive" : "MicIdle");
+        DictateLabel.Text = e.State switch
+        {
+            HildeState.Recording => "Ich höre zu …",
+            HildeState.Paused => "Pausiert",
+            HildeState.Processing => "Schreibe …",
+            _ => "Diktieren"
+        };
+        DictateHint.Text = _recording ? "Klick oder " + HotkeyName + " = fertig" : HotkeyName + " 2×";
+        SetPulse(e.State == HildeState.Recording);
         if (e.State is HildeState.Ready or HildeState.Done) SetPreview("", "");
         UpdateButtons();
+    }
+
+    private Storyboard? _pulse;
+
+    private void SetPulse(bool on)
+    {
+        if (on && _pulse == null)
+        {
+            _pulse = new Storyboard { RepeatBehavior = RepeatBehavior.Forever };
+            var dur = TimeSpan.FromSeconds(1.4);
+            void Add(DependencyObject target, string path, double from, double to)
+            {
+                var a = new DoubleAnimation(from, to, dur) { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
+                Storyboard.SetTarget(a, target);
+                Storyboard.SetTargetProperty(a, new PropertyPath(path));
+                _pulse!.Children.Add(a);
+            }
+            Add(Pulse, "Opacity", 0.45, 0);
+            Add(Pulse, "(UIElement.RenderTransform).(ScaleTransform.ScaleX)", 1, 1.6);
+            Add(Pulse, "(UIElement.RenderTransform).(ScaleTransform.ScaleY)", 1, 1.6);
+            _pulse.Begin(this, true);
+        }
+        else if (!on && _pulse != null)
+        {
+            _pulse.Stop(this);
+            _pulse = null;
+            Pulse.Opacity = 0;
+        }
     }
 
     public void ShowNotice(string? message)
@@ -151,18 +220,18 @@ public partial class EditorWindow : Window
     {
         _rewriteCts?.Cancel();
         HideCompare();
+        RemoveLive();
         Editor.Clear();
         RecordIds.Clear();
         Origin = null;
         OriginButton.Visibility = Visibility.Collapsed;
         ShowNotice(null);
-        SetPreview("", "");
         Hide();
     }
 
     private void UpdateButtons()
     {
-        bool hasText = Editor.Text.Trim().Length > 0;
+        bool hasText = Editor.Text.Trim().Length > 0 && _liveStart < 0; // während HILDE live schreibt: abwarten
         Placeholder.Visibility = Editor.Text.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
         ShortenButton.IsEnabled = ClarifyButton.IsEnabled = hasText && !_busy && Rewrite != null;
         CopyButton.IsEnabled = InsertButton.IsEnabled = hasText && !_busy;
@@ -220,8 +289,13 @@ public partial class EditorWindow : Window
         try
         {
             Clipboard.SetText(Editor.SelectionLength > 0 ? Editor.SelectedText : Editor.Text.Trim());
-            CopyButton.Content = "Kopiert ✓";
-            _ = Task.Delay(1500).ContinueWith(_ => Dispatcher.Invoke(() => CopyButton.Content = "Kopieren"));
+            CopyGlyph.Visibility = Visibility.Collapsed;
+            CheckGlyph.Visibility = Visibility.Visible;
+            _ = Task.Delay(1500).ContinueWith(_ => Dispatcher.Invoke(() =>
+            {
+                CheckGlyph.Visibility = Visibility.Collapsed;
+                CopyGlyph.Visibility = Visibility.Visible;
+            }));
         }
         catch { ShowNotice("Die Zwischenablage ist gerade belegt – bitte noch einmal versuchen."); }
     }

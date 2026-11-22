@@ -104,6 +104,7 @@ public sealed class LivePreviewSession
     private async Task<(string Text, IReadOnlyList<TimedSegment> Segments)> TranscribeWithSegmentsAsync(int from, int to)
     {
         var samples = _audio.CopyLiveSamples(from, to - from);
+        samples = AudioGain.Normalize(samples);
         if (!HasEnergy(samples)) return ("", []);
         var path = Path.Combine(_dir, $"live-{Interlocked.Increment(ref _counter)}.wav");
         WavIO.WriteMono16k(path, samples);

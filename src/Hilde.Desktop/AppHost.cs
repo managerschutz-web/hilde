@@ -149,7 +149,7 @@ public sealed class AppHost : IAsyncDisposable
         catch (Exception ex)
         {
             _log.Error(ex, "Hotkey nicht verfügbar");
-            _tray?.Notify("HILDE", "Die Diktiertaste konnte nicht aktiviert werden. Diktieren ist über die Pill möglich.");
+            Toast("HILDE", "Die Diktiertaste konnte nicht aktiviert werden. Diktieren ist über die Pill möglich.");
         }
 
         _paths.CleanTemp(TimeSpan.FromDays(1));
@@ -159,7 +159,7 @@ public sealed class AppHost : IAsyncDisposable
             try
             {
                 var n = await _controller.RecoverAsync();
-                if (n > 0) _ui.InvokeAsync(() => _tray?.Notify("HILDE", $"{n} unterbrochene Aufnahme(n) wurden wiederhergestellt und stehen im Archiv."));
+                if (n > 0) _ui.InvokeAsync(() => Toast("HILDE", $"{n} unterbrochene Aufnahme(n) wurden wiederhergestellt und stehen im Archiv."));
             }
             catch (Exception ex) { _log.Warning(ex, "Wiederherstellung"); }
         });
@@ -168,7 +168,7 @@ public sealed class AppHost : IAsyncDisposable
         {
             var missing = _models.GetStatus(Tier).Where(m => m.Required && !m.Installed && (m.Kind != ModelKind.Llm || !_settings.Current.LlmSkipped)).ToList();
             if (missing.Count > 0)
-                _ = _ui.InvokeAsync(() => _tray?.Notify("HILDE – neue Modelle",
+                _ = _ui.InvokeAsync(() => Toast("HILDE – neue Modelle",
                     $"Mit diesem Update stehen {missing.Count} neue Modelle bereit. Einstellungen › Modelle verwalten › Herunterladen."));
         }
         if (beforeShow != null) await beforeShow();
@@ -202,7 +202,7 @@ public sealed class AppHost : IAsyncDisposable
             var c = _settings.Current.Clone();
             c.Pill.Visible = false;
             _settings.Save(c);
-            _tray?.Notify("HILDE", "Die Pill ist ausgeblendet. Einblenden über das HILDE-Symbol im Infobereich.");
+            Toast("HILDE", "Die Pill ist ausgeblendet. Einblenden über das HILDE-Symbol im Infobereich.");
         };
         _pill.PositionChanged += (l, t) =>
         {
@@ -297,6 +297,14 @@ public sealed class AppHost : IAsyncDisposable
         _bridge.Emit("status", e);
         if (e.State == HildeState.Recording) ScheduleWarmUp();
     }
+
+    /// <summary>Hinweis im HILDE-Stil (statt Windows-Sprechblase). Darf von jedem Thread aufgerufen werden.</summary>
+    private void Toast(string title, string text, bool warning = false) =>
+        _ui.InvokeAsync(() =>
+        {
+            try { HildeToast.Pop(title, text, warning, onClick: ShowMainWindow); }
+            catch (Exception ex) { _log.Debug(ex, "Hinweis"); }
+        });
 
     /// <summary>Halten = direkt, Doppeltippen/Freihand = Diktierfenster (einstellbar). Offenes Fenster nimmt alles auf.</summary>
     private bool UseEditorFor(RecordingMode mode) => _editorOpen || _settings.Current.Insertion.Flow switch
@@ -410,7 +418,7 @@ public sealed class AppHost : IAsyncDisposable
         catch (Exception ex) { _log.Debug(ex, "Markierung lesen"); }
         if (string.IsNullOrWhiteSpace(text))
         {
-            _ = _ui.InvokeAsync(() => _tray?.Notify("HILDE", HildeErrors.NothingSelected.Message + " " + HildeErrors.NothingSelected.Hint));
+            _ = _ui.InvokeAsync(() => Toast("HILDE", HildeErrors.NothingSelected.Message + " " + HildeErrors.NothingSelected.Hint));
             return;
         }
         await SpeakSafeAsync(text);
@@ -421,7 +429,7 @@ public sealed class AppHost : IAsyncDisposable
         try { await _reader.SpeakAsync(text); }
         catch (HildeException ex)
         {
-            _ = _ui.InvokeAsync(() => _tray?.Notify("HILDE", ex.Error.Message + (ex.Error.Hint is { } h ? " " + h : "")));
+            _ = _ui.InvokeAsync(() => Toast("HILDE", ex.Error.Message + (ex.Error.Hint is { } h ? " " + h : "")));
             _bridge.Emit("readError", new { message = ex.Error.Message, errorId = ex.Error.Id });
         }
         catch (Exception ex)
@@ -808,7 +816,7 @@ public sealed class AppHost : IAsyncDisposable
                 using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(3));
                 var sr = await _speech.TranscribeAsync(new SpeechRequest(audio.WavPath, _settings.Current.Language, _dictionary.InitialPrompt, Fast: _settings.Current.FastShortDictation), cts.Token);
                 var asr = sw.Elapsed.TotalSeconds;
-                var raw = HallucinationFilter.Clean(sr.Text, vad);
+                var raw = PromptEcho.Strip(HallucinationFilter.Clean(sr.Text, vad), _dictionary.InitialPrompt);
                 var tr = await _text.ProcessAsync(new TextRequest(_dictionary.Apply(raw), _settings.Current.TextMode,
                     sr.DetectedLanguage, _dictionary.ProtectedTerms), cts.Token);
                 return (object)new

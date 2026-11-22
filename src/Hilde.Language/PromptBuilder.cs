@@ -60,14 +60,18 @@ public static class PromptBuilder
     }
 
     public static BuiltPrompt BuildRewrite(PromptFormat format, RewriteKind kind, string text, IReadOnlyList<string> protectedTerms) =>
-        Wrap(format, RewriteSystemPrompt(kind, protectedTerms), text,
+        Wrap(format, RewriteSystemPrompt(kind, Present(protectedTerms, text)), text,
             Math.Clamp((int)(text.Length / 3.0 * (kind == RewriteKind.Shorten ? 0.9 : 1.4)) + 96, 96, 3000));
 
     public static BuiltPrompt Build(PromptFormat format, TextMode mode, string text, IReadOnlyList<string> protectedTerms)
     {
         int maxTokens = Math.Clamp((int)(text.Length / 3.0 * 1.5) + 64, 64, 2048);
-        return Wrap(format, SystemPrompt(mode, protectedTerms), text, maxTokens);
+        return Wrap(format, SystemPrompt(mode, Present(protectedTerms, text)), text, maxTokens);
     }
+
+    /// <summary>Nur Begriffe nennen, die im Text vorkommen – sonst schreibt das Modell sie womöglich dazu.</summary>
+    public static IReadOnlyList<string> Present(IReadOnlyList<string> terms, string text) =>
+        terms.Where(t => text.Contains(t, StringComparison.OrdinalIgnoreCase)).ToList();
 
     private static BuiltPrompt Wrap(PromptFormat format, string system, string text, int maxTokens)
     {

@@ -182,9 +182,8 @@ public partial class EditorWindow : Window
     {
         if (Editor.Text.Trim().Length > 0)
         {
-            var r = MessageBox.Show(this, "Text im Diktierfenster verwerfen?\n\nDie einzelnen Diktate bleiben im Archiv.",
-                "HILDE", MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.No);
-            if (r != MessageBoxResult.Yes) return;
+            if (!HildeDialog.Ask(this, "Text verwerfen?", "Der Text im Diktierfenster geht verloren. Die einzelnen Diktate bleiben im Archiv.",
+                    "Verwerfen", "Behalten", warning: true)) return;
         }
         Reset();
         Discarded?.Invoke();

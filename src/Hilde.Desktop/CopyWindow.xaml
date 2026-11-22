@@ -1,23 +1,42 @@
 <Window x:Class="Hilde.Desktop.CopyWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="HILDE – Text zum Kopieren" Width="520" Height="340" MinWidth="380" MinHeight="240"
-        WindowStartupLocation="CenterScreen" Topmost="True" FontFamily="{StaticResource UiFont}"
-        Background="#FAFAFB" Icon="pack://application:,,,/Assets/hilde.ico">
-    <Grid Margin="18">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="*"/>
-            <RowDefinition Height="Auto"/>
-        </Grid.RowDefinitions>
-        <TextBlock x:Name="Message" TextWrapping="Wrap" FontSize="14" Foreground="#1F2937" Margin="0,0,0,10"/>
-        <TextBox x:Name="TextBox" Grid.Row="1" TextWrapping="Wrap" AcceptsReturn="True" FontSize="14"
-                 VerticalScrollBarVisibility="Auto" Padding="8" BorderBrush="#D1D5DB"/>
-        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">
-            <TextBlock x:Name="Copied" Text="Kopiert ✓" Foreground="#059669" VerticalAlignment="Center"
-                       Margin="0,0,12,0" Visibility="Collapsed"/>
-            <Button Content="Kopieren" Padding="18,6" IsDefault="True" Click="OnCopy" Margin="0,0,8,0"/>
-            <Button Content="Schließen" Padding="18,6" IsCancel="True" Click="OnClose"/>
-        </StackPanel>
-    </Grid>
+        Title="HILDE – Text zum Kopieren" Width="560" Height="360" MinWidth="400" MinHeight="260"
+        WindowStyle="None" AllowsTransparency="True" Background="Transparent" ResizeMode="CanResizeWithGrip"
+        WindowStartupLocation="CenterScreen" Topmost="True" UseLayoutRounding="True" FontFamily="{StaticResource UiFont}"
+        Icon="pack://application:,,,/Assets/hilde.ico">
+    <Border Margin="12" CornerRadius="16" Background="#F7161A22" BorderBrush="#33FFFFFF" BorderThickness="1">
+        <Border.Effect>
+            <DropShadowEffect BlurRadius="22" ShadowDepth="3" Opacity="0.45" Color="Black"/>
+        </Border.Effect>
+        <Grid Margin="18,14,18,16">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+            <Grid Background="Transparent" MouseLeftButtonDown="OnDrag" Margin="0,0,0,12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <Border Width="36" Height="36" CornerRadius="18" BorderThickness="2" BorderBrush="#FBBF24" VerticalAlignment="Top">
+                    <Border.Background>
+                        <ImageBrush ImageSource="pack://application:,,,/Assets/avatar.png" Stretch="UniformToFill"/>
+                    </Border.Background>
+                </Border>
+                <StackPanel Grid.Column="1" Margin="12,0,0,0">
+                    <TextBlock Text="Hier konnte ich nicht einfügen" Foreground="#F0F4FA" FontSize="14" FontWeight="SemiBold"/>
+                    <TextBlock x:Name="Message" TextWrapping="Wrap" FontSize="12.5" Foreground="#B8C4D4" Margin="0,3,0,0"/>
+                </StackPanel>
+            </Grid>
+            <TextBox x:Name="TextBox" Grid.Row="1" Style="{StaticResource Box}"/>
+            <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">
+                <TextBlock x:Name="Copied" Text="Kopiert ✓" Foreground="#5EEBB5" VerticalAlignment="Center"
+                           Margin="0,0,12,0" Visibility="Collapsed"/>
+                <Button Content="Schließen" Style="{StaticResource Chip}" IsCancel="True" Click="OnClose"/>
+                <Button Content="Kopieren" Style="{StaticResource Primary}" IsDefault="True" Click="OnCopy"/>
+            </StackPanel>
+        </Grid>
+    </Border>
 </Window>

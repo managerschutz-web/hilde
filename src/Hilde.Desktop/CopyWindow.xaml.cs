@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Input;
 
 namespace Hilde.Desktop;
 
@@ -20,6 +21,7 @@ public partial class CopyWindow : Window
         {
             Clipboard.SetText(TextBox.Text);
             Copied.Visibility = Visibility.Visible;
+            _ = Task.Delay(900).ContinueWith(_ => Dispatcher.Invoke(Close));
         }
         catch (Exception)
         {
@@ -28,4 +30,9 @@ public partial class CopyWindow : Window
     }
 
     private void OnClose(object sender, RoutedEventArgs e) => Close();
+
+    private void OnDrag(object sender, MouseButtonEventArgs e)
+    {
+        if (e.ButtonState == MouseButtonState.Pressed) try { DragMove(); } catch (InvalidOperationException) { }
+    }
 }

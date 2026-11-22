@@ -109,7 +109,7 @@ public sealed class LivePreviewSession
             var r = await _speech.TranscribeAsync(
                 new SpeechRequest(path, _language, BuildPrompt(_basePrompt, CommittedText), Fast: true, Background: true), cts.Token)
                 .ConfigureAwait(false);
-            return (HallucinationFilter.Clean(r.Text), r.Segments);
+            return (PromptEcho.Strip(HallucinationFilter.Clean(r.Text), _basePrompt), r.Segments);
         }
         finally
         {

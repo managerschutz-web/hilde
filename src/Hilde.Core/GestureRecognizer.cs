@@ -12,7 +12,12 @@ public enum GestureAction
     /// <summary>Doppeltipp erkannt: Freihandaufnahme starten.</summary>
     StartHandsFree,
     /// <summary>Escape: laufende Aufnahme verwerfen.</summary>
-    Cancel
+    Cancel,
+    /// <summary>
+    /// Kurz gehalten und losgelassen: Aufnahme läuft weiter, bis klar ist, ob ein zweiter Tipp (Freihand) folgt.
+    /// Danach <see cref="GestureRecognizer.ResolvePending"/> aufrufen.
+    /// </summary>
+    AwaitSecondTap
 }
 
 /// <summary>
@@ -21,7 +26,7 @@ public enum GestureAction
 /// </summary>
 public sealed class GestureRecognizer
 {
-    private enum S { Idle, Held, TapReleased, ComboHeld, HandsFreeHeld, HandsFree, StopHeld }
+    private enum S { Idle, Held, TapReleased, ComboHeld, HandsFreeHeld, HandsFree, StopHeld, ShortReleased }
 
     private S _state = S.Idle;
     private long _downAt;
@@ -29,9 +34,11 @@ public sealed class GestureRecognizer
 
     public int MinHoldMs { get; set; } = 250;
     public int DoubleTapMs { get; set; } = 350;
+    /// <summary>Kürzer gehalten = könnte der erste Tipp eines Doppeltipps sein (Aufnahme läuft dann weiter).</summary>
+    public int ShortHoldMs { get; set; } = 700;
 
     /// <summary>True, solange eine (auch vorläufige) Aufnahme läuft.</summary>
-    public bool IsRecording => _state is S.Held or S.HandsFreeHeld or S.HandsFree;
+    public bool IsRecording => _state is S.Held or S.HandsFreeHeld or S.HandsFree or S.ShortReleased;
 
     public bool IsHandsFree => _state is S.HandsFreeHeld or S.HandsFree;
 
@@ -52,6 +59,16 @@ public sealed class GestureRecognizer
                 _downAt = nowMs;
                 _state = S.Held;
                 return GestureAction.StartProvisional;
+            case S.ShortReleased:
+                if (nowMs - _tapUpAt <= DoubleTapMs)
+                {
+                    // Etwas zu langsamer Doppeltipp: laufende Aufnahme wird zur Freihandaufnahme.
+                    _state = S.HandsFreeHeld;
+                    return GestureAction.StartHandsFree;
+                }
+                // Zeitfenster verpasst (Auflösung kam noch nicht an): erst verarbeiten, Taste gilt als verbraucht
+                _state = S.StopHeld;
+                return GestureAction.StopAndProcess;
             case S.HandsFree:
                 _state = S.StopHeld;
                 return GestureAction.StopAndProcess;
@@ -72,6 +89,12 @@ public sealed class GestureRecognizer
                     _state = S.TapReleased;
                     return GestureAction.DiscardProvisional;
                 }
+                if (nowMs - _downAt < ShortHoldMs)
+                {
+                    _tapUpAt = nowMs;
+                    _state = S.ShortReleased;
+                    return GestureAction.AwaitSecondTap;
+                }
                 _state = S.Idle;
                 return GestureAction.StopAndProcess;
             case S.HandsFreeHeld:
@@ -86,9 +109,22 @@ public sealed class GestureRecognizer
         }
     }
 
+    /// <summary>Nach <see cref="GestureAction.AwaitSecondTap"/>: kam kein zweiter Tipp, jetzt verarbeiten.</summary>
+    public GestureAction ResolvePending(long nowMs)
+    {
+        if (_state != S.ShortReleased || nowMs - _tapUpAt < DoubleTapMs) return GestureAction.None;
+        _state = S.Idle;
+        return GestureAction.StopAndProcess;
+    }
+
     /// <summary>Andere Taste gedrückt (Inhalt wird nicht ausgewertet).</summary>
     public GestureAction OtherKeyDown(long nowMs)
     {
+        if (_state == S.ShortReleased)
+        {
+            _state = S.Idle;
+            return GestureAction.StopAndProcess;
+        }
         if (_state == S.Held)
         {
             // Strg+C o. Ä.: Nutzer verwendet ein Tastenkürzel, kein Diktat.
@@ -108,6 +144,7 @@ public sealed class GestureRecognizer
                 _state = S.ComboHeld;
                 return GestureAction.Cancel;
             case S.HandsFree:
+            case S.ShortReleased:
                 _state = S.Idle;
                 return GestureAction.Cancel;
             default:

@@ -146,6 +146,7 @@ public sealed class DictationController : IAsyncDisposable
                     case GestureAction.DiscardProvisional: DiscardRecording(silent: true); break;
                     case GestureAction.Cancel: DiscardRecording(silent: false); break;
                     case GestureAction.StopAndProcess: await StopRecordingAsync().ConfigureAwait(false); break;
+                    case GestureAction.AwaitSecondTap: ScheduleResolve(); break;
                 }
             }
             catch (HildeException ex)
@@ -240,6 +241,19 @@ public sealed class DictationController : IAsyncDisposable
 
     private void ResetGestures() { lock (Gestures) Gestures.Reset(); }
 
+    /// <summary>Kurz gehalten: kurz abwarten, ob ein zweiter Tipp (Freihand) kommt – sonst normal verarbeiten.</summary>
+    private void ScheduleResolve()
+    {
+        int wait = Gestures.DoubleTapMs + 40;
+        _ = Task.Run(async () =>
+        {
+            await Task.Delay(wait).ConfigureAwait(false);
+            GestureAction a;
+            lock (Gestures) a = Gestures.ResolvePending(Environment.TickCount64);
+            Post(a);
+        });
+    }
+
     private async Task JobLoopAsync()
     {
         await foreach (var job in _jobs.Reader.ReadAllAsync(_cts.Token).ConfigureAwait(false))
@@ -285,7 +299,7 @@ public sealed class DictationController : IAsyncDisposable
 
         if (job.Audio.Duration < TimeSpan.FromMilliseconds(300))
         {
-            await DropAsync(record, HildeErrors.TooShort).ConfigureAwait(false);
+            await DropAsync(record, HildeErrors.TooShort, silent: true).ConfigureAwait(false);
             return;
         }
 
@@ -293,7 +307,8 @@ public sealed class DictationController : IAsyncDisposable
         var vad = _vad.Analyze(samples);
         if (!vad.HasSpeech)
         {
-            await DropAsync(record, HildeErrors.NoSpeech).ConfigureAwait(false);
+            // Kurzes Drücken ohne Sprache: einfach still zurück auf „Bereit“, keine Meldung
+            await DropAsync(record, HildeErrors.NoSpeech, silent: job.Audio.Duration < TimeSpan.FromSeconds(2.5)).ConfigureAwait(false);
             return;
         }
 
@@ -331,7 +346,10 @@ public sealed class DictationController : IAsyncDisposable
                 {
                     speech = await _speech.TranscribeAsync(
                         new SpeechRequest(asrPath, s.Language,
-                            prefix == null ? _dictionary.InitialPrompt : LivePreviewSession.BuildPrompt(_dictionary.InitialPrompt, prefix),
+                            prefix == null
+                                // Kurze Aufnahmen ohne Hinweis: dort schreibt Whisper die Begriffsliste sonst gern mit ab.
+                                ? (asrDuration >= TimeSpan.FromSeconds(3) ? _dictionary.InitialPrompt : null)
+                                : LivePreviewSession.BuildPrompt(_dictionary.InitialPrompt, prefix),
                             Fast: s.FastShortDictation), tcs.Token)
                         .ConfigureAwait(false);
                 }
@@ -360,7 +378,7 @@ public sealed class DictationController : IAsyncDisposable
         }
         var tAsr = sw.Elapsed;
 
-        var raw = HallucinationFilter.Clean(speech.Text, vad);
+        var raw = PromptEcho.Strip(HallucinationFilter.Clean(speech.Text, vad), _dictionary.InitialPrompt);
         if (string.IsNullOrWhiteSpace(raw))
         {
             await DropAsync(record, HildeErrors.NoSpeech).ConfigureAwait(false);
@@ -508,11 +526,13 @@ public sealed class DictationController : IAsyncDisposable
         return count;
     }
 
-    private async Task DropAsync(TranscriptRecord record, HildeErrors.Entry reason)
+    private async Task DropAsync(TranscriptRecord record, HildeErrors.Entry reason, bool silent = false)
     {
         PreviewChanged?.Invoke("", "");
         try { await _repo.DeleteAsync(record.Id).ConfigureAwait(false); } catch (Exception ex) { _log.Debug(ex, "Drop"); }
         TryDeleteDir(_paths.RecordingDir(record.Id));
+        _log.Information("Diktat verworfen: {ErrorId}, Audio {Audio:F1}s", reason.Id, record.DurationMs / 1000.0);
+        if (silent) { SetIdleOrProcessing(); return; }
         SetState(HildeState.Done, reason.Message, reason.Id);
         ScheduleReady();
     }

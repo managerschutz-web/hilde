@@ -47,9 +47,9 @@ public partial class App : Application
         {
             splash?.Close();
             Log.Fatal(ex, "Start fehlgeschlagen");
-            MessageBox.Show("HILDE konnte nicht gestartet werden.\n\n" + ex.Message +
-                            "\n\nDetails stehen im Protokoll unter " + paths.Logs,
-                "HILDE", MessageBoxButton.OK, MessageBoxImage.Error);
+            var text = ex.Message + "\n\nDetails stehen im Protokoll unter " + paths.Logs;
+            try { HildeDialog.Inform(null, "HILDE konnte nicht starten", text, warning: true); }
+            catch { MessageBox.Show("HILDE konnte nicht gestartet werden.\n\n" + text, "HILDE", MessageBoxButton.OK, MessageBoxImage.Error); }
             Shutdown(1);
         }
     }
